@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Light Puzzle Builder</title>
+  <style>
+    body {
+      background: #111;
+      color: white;
+      font-family: sans-serif;
+      text-align: center;
+    }
+
+    svg {
+      background: #1a1a1a;
+      border-radius: 10px;
+      margin-top: 10px;
+    }
+
+    circle {
+      cursor: pointer;
+      transition: fill 0.15s;
+    }
+
+    button, select, input {
+      margin: 5px;
+    }
+  </style>
+</head>
+<body>
+
+<h2>Light Puzzle Builder</h2>
+
+<select id="shapeSelect">
+  <option value="ring">Ring</option>
+  <option value="grid">Grid</option>
+</select>
+
+<button id="modeBtn">Mode: EDIT</button>
+<button id="randomBtn">Randomize</button>
+
+<div id="controls"></div>
+
+<svg id="svg" width="400" height="400"></svg>
+
+<script>
+  const svg = document.getElementById("svg");
+  const controls = document.getElementById("controls");
+  const shapeSelect = document.getElementById("shapeSelect");
+  const modeBtn = document.getElementById("modeBtn");
+  const randomBtn = document.getElementById("randomBtn");
+
+  const SIZE = 400;
+  const nodeRadius = 10;
+  const RED = "#FF0000";
+  const BLUE = "#0000FF";
+
+  let nodes = [];
+  let shape = "ring";
+  let editMode = true;
+  let adjacency = () => [];
+
+  /* ---------- CORE ---------- */
+
+  function clear() {
+    svg.innerHTML = "";
+    nodes = [];
+  }
+
+  function createNode(x, y, index) {
+    const c = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+    c.setAttribute("cx", x);
+    c.setAttribute("cy", y);
+    c.setAttribute("r", nodeRadius);
+
+    // START ON (RED)
+    c.dataset.active = "true";
+    updateColor(c);
+
+    c.addEventListener("click", () => {
+      if (editMode) {
+        toggleSingle(index);
+      } else {
+        toggleWithNeighbors(index);
+      }
+    });
+
+    svg.appendChild(c);
+    nodes.push(c);
+  }
+
+  function updateColor(node) {
+    node.setAttribute(
+      "fill",
+      node.dataset.active === "true" ? RED : BLUE
+    );
+  }
+
+  function toggleNode(i) {
+    const n = nodes[i];
+    n.dataset.active = (n.dataset.active !== "true").toString();
+    updateColor(n);
+  }
+
+  function toggleSingle(i) {
+    toggleNode(i);
+  }
+
+  function toggleWithNeighbors(i) {
+    adjacency(i).forEach(toggleNode);
+  }
+
+  /* ---------- RING ---------- */
+
+  function drawRing(count) {
+    clear();
+    const center = SIZE / 2;
+    const radius = 140;
+
+    for (let i = 0; i < count; i++) {
+      const a = (i / count) * Math.PI * 2;
+      createNode(
+        center + Math.cos(a) * radius,
+        center + Math.sin(a) * radius,
+        i
+      );
+    }
+
+    adjacency = i => [
+      i,
+      (i - 1 + count) % count,
+      (i + 1) % count
+    ];
+  }
+
+  /* ---------- GRID ---------- */
+
+  function drawGrid(rows, cols) {
+    clear();
+    const sx = SIZE / (cols + 1);
+    const sy = SIZE / (rows + 1);
+
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        createNode(
+          sx * (c + 1),
+          sy * (r + 1),
+          r * cols + c
+        );
+      }
+    }
+
+    adjacency = i => {
+      const r = Math.floor(i / cols);
+      const c = i % cols;
+      const list = [i];
+
+      if (r > 0) list.push(i - cols);
+      if (r < rows - 1) list.push(i + cols);
+      if (c > 0) list.push(i - 1);
+      if (c < cols - 1) list.push(i + 1);
+
+      return list;
+    };
+  }
+
+  /* ---------- RANDOMIZE ---------- */
+
+  randomBtn.onclick = () => {
+    nodes.forEach(node => {
+      node.dataset.active = Math.random() < 0.5 ? "true" : "false";
+      updateColor(node);
+    });
+  };
+
+  /* ---------- UI ---------- */
+
+  function updateControls() {
+    controls.innerHTML = "";
+
+    if (shape === "ring") {
+      controls.innerHTML = `
+        Nodes:
+        <input type="range" min="3" max="40" value="12" id="ringCount">
+        <span id="ringLabel">12</span>
+      `;
+      const s = document.getElementById("ringCount");
+      const l = document.getElementById("ringLabel");
+
+      s.oninput = () => {
+        l.textContent = s.value;
+        drawRing(+s.value);
+      };
+      drawRing(+s.value);
+    }
+
+    if (shape === "grid") {
+      controls.innerHTML = `
+        Rows: <input type="number" value="5" min="2" max="10" id="rows">
+        Cols: <input type="number" value="5" min="2" max="10" id="cols">
+        <button id="build">Build</button>
+      `;
+      document.getElementById("build").onclick = () =>
+        drawGrid(
+          +rows.value,
+          +cols.value
+        );
+      drawGrid(5, 5);
+    }
+  }
+
+  shapeSelect.onchange = () => {
+    shape = shapeSelect.value;
+    updateControls();
+  };
+
+  modeBtn.onclick = () => {
+    editMode = !editMode;
+    modeBtn.textContent = `Mode: ${editMode ? "EDIT" : "PLAY"}`;
+  };
+
+  updateControls();
+</script>
+
+</body>
+</html>
