@@ -54,8 +54,10 @@
   const nodeRadius = 10;
   const RED = "#FF0000";
   const BLUE = "#0000FF";
+  const LINE_COLOR = "#666";
 
   let nodes = [];
+  let positions = [];
   let shape = "ring";
   let editMode = true;
   let adjacency = () => [];
@@ -65,23 +67,24 @@
   function clear() {
     svg.innerHTML = "";
     nodes = [];
+    positions = [];
   }
 
   function createNode(x, y, index) {
+    positions[index] = { x, y };
+
     const c = document.createElementNS("http://www.w3.org/2000/svg", "circle");
     c.setAttribute("cx", x);
     c.setAttribute("cy", y);
     c.setAttribute("r", nodeRadius);
-
-    // START ON (RED)
     c.dataset.active = "true";
     updateColor(c);
 
     c.addEventListener("click", () => {
       if (editMode) {
-        toggleSingle(index);
+        toggleNode(index);
       } else {
-        toggleWithNeighbors(index);
+        adjacency(index).forEach(toggleNode);
       }
     });
 
@@ -102,12 +105,31 @@
     updateColor(n);
   }
 
-  function toggleSingle(i) {
-    toggleNode(i);
-  }
+  /* ---------- EDGES ---------- */
 
-  function toggleWithNeighbors(i) {
-    adjacency(i).forEach(toggleNode);
+  function drawEdges() {
+    const edgeLayer = document.createElementNS("http://www.w3.org/2000/svg", "g");
+
+    positions.forEach((p, i) => {
+      adjacency(i).forEach(j => {
+        if (j > i) {
+          const q = positions[j];
+          const line = document.createElementNS(
+            "http://www.w3.org/2000/svg",
+            "line"
+          );
+          line.setAttribute("x1", p.x);
+          line.setAttribute("y1", p.y);
+          line.setAttribute("x2", q.x);
+          line.setAttribute("y2", q.y);
+          line.setAttribute("stroke", LINE_COLOR);
+          line.setAttribute("stroke-width", "2");
+          edgeLayer.appendChild(line);
+        }
+      });
+    });
+
+    svg.prepend(edgeLayer);
   }
 
   /* ---------- RING ---------- */
@@ -131,6 +153,8 @@
       (i - 1 + count) % count,
       (i + 1) % count
     ];
+
+    drawEdges();
   }
 
   /* ---------- GRID ---------- */
@@ -162,6 +186,8 @@
 
       return list;
     };
+
+    drawEdges();
   }
 
   /* ---------- RANDOMIZE ---------- */
@@ -201,10 +227,7 @@
         <button id="build">Build</button>
       `;
       document.getElementById("build").onclick = () =>
-        drawGrid(
-          +rows.value,
-          +cols.value
-        );
+        drawGrid(+rows.value, +cols.value);
       drawGrid(5, 5);
     }
   }
