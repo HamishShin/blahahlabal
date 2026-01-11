@@ -22,6 +22,15 @@
       transition: fill 0.15s;
     }
 
+    text {
+      pointer-events: none;
+      font-size: 14px;
+      font-weight: bold;
+      fill: white;
+      text-anchor: middle;
+      dominant-baseline: middle;
+    }
+
     button, select, input {
       margin: 5px;
     }
@@ -38,6 +47,7 @@
 
 <button id="modeBtn">Mode: EDIT</button>
 <button id="randomBtn">Randomize</button>
+<button id="displayBtn">Display: COLORS</button>
 
 <div id="controls"></div>
 
@@ -49,17 +59,20 @@
   const shapeSelect = document.getElementById("shapeSelect");
   const modeBtn = document.getElementById("modeBtn");
   const randomBtn = document.getElementById("randomBtn");
+  const displayBtn = document.getElementById("displayBtn");
 
   const SIZE = 400;
-  const nodeRadius = 10;
+  const nodeRadius = 12;
   const RED = "#FF0000";
   const BLUE = "#0000FF";
   const LINE_COLOR = "#666";
 
   let nodes = [];
+  let labels = [];
   let positions = [];
   let shape = "ring";
   let editMode = true;
+  let displayMode = "colors";
   let adjacency = () => [];
 
   /* ---------- CORE ---------- */
@@ -67,6 +80,7 @@
   function clear() {
     svg.innerHTML = "";
     nodes = [];
+    labels = [];
     positions = [];
   }
 
@@ -78,7 +92,10 @@
     c.setAttribute("cy", y);
     c.setAttribute("r", nodeRadius);
     c.dataset.active = "true";
-    updateColor(c);
+
+    const t = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    t.setAttribute("x", x);
+    t.setAttribute("y", y);
 
     c.addEventListener("click", () => {
       if (editMode) {
@@ -89,20 +106,28 @@
     });
 
     svg.appendChild(c);
+    svg.appendChild(t);
+
     nodes.push(c);
+    labels.push(t);
+
+    updateNode(index);
   }
 
-  function updateColor(node) {
-    node.setAttribute(
-      "fill",
-      node.dataset.active === "true" ? RED : BLUE
-    );
+  function updateNode(i) {
+    const node = nodes[i];
+    const label = labels[i];
+    const active = node.dataset.active === "true";
+
+    node.setAttribute("fill", active ? RED : BLUE);
+    label.textContent = active ? "0" : "1";
+    label.style.display = displayMode === "numbers" ? "block" : "none";
   }
 
   function toggleNode(i) {
     const n = nodes[i];
     n.dataset.active = (n.dataset.active !== "true").toString();
-    updateColor(n);
+    updateNode(i);
   }
 
   /* ---------- EDGES ---------- */
@@ -193,10 +218,19 @@
   /* ---------- RANDOMIZE ---------- */
 
   randomBtn.onclick = () => {
-    nodes.forEach(node => {
+    nodes.forEach((node, i) => {
       node.dataset.active = Math.random() < 0.5 ? "true" : "false";
-      updateColor(node);
+      updateNode(i);
     });
+  };
+
+  /* ---------- DISPLAY MODE ---------- */
+
+  displayBtn.onclick = () => {
+    displayMode = displayMode === "colors" ? "numbers" : "colors";
+    displayBtn.textContent =
+      "Display: " + (displayMode === "colors" ? "COLORS" : "NUMBERS");
+    nodes.forEach((_, i) => updateNode(i));
   };
 
   /* ---------- UI ---------- */
