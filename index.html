@@ -49,6 +49,10 @@
 <button id="randomBtn">Randomize</button>
 <button id="displayBtn">Display: COLORS</button>
 
+<br>
+States (k):
+<input type="number" id="stateCount" value="3" min="2" max="6">
+
 <div id="controls"></div>
 
 <svg id="svg" width="400" height="400"></svg>
@@ -60,13 +64,22 @@
   const modeBtn = document.getElementById("modeBtn");
   const randomBtn = document.getElementById("randomBtn");
   const displayBtn = document.getElementById("displayBtn");
+  const stateCountInput = document.getElementById("stateCount");
 
   const SIZE = 400;
   const nodeRadius = 12;
-  const RED = "#FF0000";
-  const BLUE = "#0000FF";
   const LINE_COLOR = "#666";
 
+  const COLORS = [
+    "#FF0000", // 0 red
+    "#0000FF", // 1 blue
+    "#00FF00", // 2 green
+    "#FFFF00", // 3 yellow
+    "#FF00FF", // 4 magenta
+    "#00FFFF"  // 5 cyan
+  ];
+
+  let k = 3;
   let nodes = [];
   let labels = [];
   let positions = [];
@@ -91,7 +104,7 @@
     c.setAttribute("cx", x);
     c.setAttribute("cy", y);
     c.setAttribute("r", nodeRadius);
-    c.dataset.active = "true";
+    c.dataset.state = "0";
 
     const t = document.createElementNS("http://www.w3.org/2000/svg", "text");
     t.setAttribute("x", x);
@@ -99,9 +112,9 @@
 
     c.addEventListener("click", () => {
       if (editMode) {
-        toggleNode(index);
+        incrementState(index);
       } else {
-        adjacency(index).forEach(toggleNode);
+        adjacency(index).forEach(incrementState);
       }
     });
 
@@ -117,16 +130,16 @@
   function updateNode(i) {
     const node = nodes[i];
     const label = labels[i];
-    const active = node.dataset.active === "true";
+    const state = +node.dataset.state;
 
-    node.setAttribute("fill", active ? RED : BLUE);
-    label.textContent = active ? "0" : "1";
+    node.setAttribute("fill", COLORS[state % COLORS.length]);
+    label.textContent = state;
     label.style.display = displayMode === "numbers" ? "block" : "none";
   }
 
-  function toggleNode(i) {
+  function incrementState(i) {
     const n = nodes[i];
-    n.dataset.active = (n.dataset.active !== "true").toString();
+    n.dataset.state = ((+n.dataset.state + 1) % k).toString();
     updateNode(i);
   }
 
@@ -219,18 +232,26 @@
 
   randomBtn.onclick = () => {
     nodes.forEach((node, i) => {
-      node.dataset.active = Math.random() < 0.5 ? "true" : "false";
+      node.dataset.state = Math.floor(Math.random() * k);
       updateNode(i);
     });
   };
 
-  /* ---------- DISPLAY MODE ---------- */
+  /* ---------- DISPLAY ---------- */
 
   displayBtn.onclick = () => {
     displayMode = displayMode === "colors" ? "numbers" : "colors";
     displayBtn.textContent =
       "Display: " + (displayMode === "colors" ? "COLORS" : "NUMBERS");
     nodes.forEach((_, i) => updateNode(i));
+  };
+
+  stateCountInput.onchange = () => {
+    k = Math.max(2, +stateCountInput.value);
+    nodes.forEach((node, i) => {
+      node.dataset.state = (+node.dataset.state % k).toString();
+      updateNode(i);
+    });
   };
 
   /* ---------- UI ---------- */
