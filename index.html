@@ -40,7 +40,7 @@
 <select id="shapeSelect">
   <option value="grid">Grid</option>
   <option value="ring">Ring</option>
-  <option value="star">Star Polygon</option>
+  <option value="star">Star Shape</option>
 </select>
 
 <button id="modeBtn">Mode: PLAY</button>
@@ -146,15 +146,18 @@ function drawEdges() {
           l.setAttribute("stroke-width","2");
           g.appendChild(l);
         } else {
-          const dx = Math.abs(j-i);
-          const midx = (p.x+q.x)/2;
-          const midy = SIZE/2 - 30 - dx*6;
+          const dy = Math.abs(j - i);
+
+          // MUCH stronger curvature
+          const curveStrength = 120 + dy * 40;
+          const cx = SIZE / 2 + curveStrength;
+          const cy = (p.y + q.y) / 2;
 
           const path = document.createElementNS("http://www.w3.org/2000/svg","path");
           path.setAttribute(
             "d",
             `M ${p.x} ${p.y}
-             Q ${midx} ${midy}
+             Q ${cx} ${cy}
              ${q.x} ${q.y}`
           );
           path.setAttribute("fill","none");
@@ -205,48 +208,50 @@ function drawRing(n) {
   drawEdges();
 }
 
-function drawStar(n) {
+function drawStar(spikes) {
   clear();
-  const cx=SIZE/2, cy=SIZE/2, rad=190;
-  const step=Math.floor(n/2);
+  const cx=SIZE/2, cy=SIZE/2;
+  const R1=190, R2=90;
+  const total = spikes * 2;
 
-  for(let i=0;i<n;i++){
-    const a=2*Math.PI*i/n;
-    createNode(cx+Math.cos(a)*rad,cy+Math.sin(a)*rad,i);
+  for(let i=0;i<total;i++){
+    const a = Math.PI * i / spikes;
+    const r = i % 2 === 0 ? R1 : R2;
+    createNode(cx + Math.cos(a)*r, cy + Math.sin(a)*r, i);
   }
 
-  adjacency=i=>[i,(i+step)%n,(i-step+n)%n];
+  adjacency=i=>[i,(i-1+total)%total,(i+1)%total];
   drawEdges();
 }
 
-/* ---------- ANIMATED LINEARIZATION ---------- */
+/* ---------- ANIMATED VERTICAL LINEARIZATION ---------- */
 
 function animateLinearize() {
-  const start=positions.map(p=>({...p}));
-  const end=[];
-  const y=SIZE/2;
-  const spacing=SIZE/(nodes.length+1);
+  const start = positions.map(p=>({...p}));
+  const end = [];
+  const x = SIZE / 2;
+  const spacing = SIZE / (nodes.length + 1);
 
   if(!linear){
     for(let i=0;i<nodes.length;i++)
-      end[i]={x:spacing*(i+1),y};
+      end[i] = {x, y: spacing*(i+1)};
   } else {
     for(let i=0;i<nodes.length;i++)
-      end[i]={...originalPositions[i]};
+      end[i] = {...originalPositions[i]};
   }
 
-  linear=!linear;
-  const duration=600;
-  const t0=performance.now();
+  linear = !linear;
+  const duration = 700;
+  const t0 = performance.now();
 
   function step(now){
-    const t=Math.min((now-t0)/duration,1);
-    const s=t*t*(3-2*t);
+    const t = Math.min((now - t0)/duration, 1);
+    const s = t*t*(3 - 2*t);
 
     nodes.forEach((n,i)=>{
-      const x=start[i].x+(end[i].x-start[i].x)*s;
-      const y=start[i].y+(end[i].y-start[i].y)*s;
-      positions[i]={x,y};
+      const x = start[i].x + (end[i].x - start[i].x) * s;
+      const y = start[i].y + (end[i].y - start[i].y) * s;
+      positions[i] = {x,y};
       n.setAttribute("cx",x);
       n.setAttribute("cy",y);
       labels[i].setAttribute("x",x);
@@ -254,29 +259,44 @@ function animateLinearize() {
     });
 
     drawEdges();
-    if(t<1)requestAnimationFrame(step);
+    if(t < 1) requestAnimationFrame(step);
   }
   requestAnimationFrame(step);
 }
 
 /* ---------- UI ---------- */
 
-shapeSelect.onchange=()=>{shape=shapeSelect.value; updateControls();};
-modeBtn.onclick=()=>{editMode=!editMode; modeBtn.textContent=`Mode: ${editMode?"EDIT":"PLAY"}`;};
-displayBtn.onclick=()=>{
-  displayMode=displayMode==="colors"?"numbers":"colors";
-  displayBtn.textContent=`Display: ${displayMode.toUpperCase()}`;
+shapeSelect.onchange = () => {shape = shapeSelect.value; updateControls();};
+modeBtn.onclick = () => {editMode = !editMode; modeBtn.textContent = `Mode: ${editMode?"EDIT":"PLAY"}`;};
+displayBtn.onclick = () => {
+  displayMode = displayMode === "colors" ? "numbers" : "colors";
+  displayBtn.textContent = `Display: ${displayMode.toUpperCase()}`;
   nodes.forEach((_,i)=>update(i));
 };
-randomBtn.onclick=()=>nodes.forEach((n,i)=>{n.dataset.state=Math.floor(Math.random()*k);update(i);});
-stateCount.onchange=e=>{k=Math.max(2,+e.target.value);nodes.forEach((n,i)=>{n.dataset.state%=k;update(i);});};
-lineBtn.onclick=animateLinearize;
+randomBtn.onclick = () => nodes.forEach((n,i)=>{n.dataset.state=Math.floor(Math.random()*k);update(i);});
+stateCount.onchange = e => {
+  k = Math.max(2, +e.target.value);
+  nodes.forEach((n,i)=>{n.dataset.state%=k; update(i);});
+};
+lineBtn.onclick = animateLinearize;
 
 function updateControls(){
   controls.innerHTML="";
-  if(shape==="grid"){controls.innerHTML=`Rows <input id="r" value="5"> Cols <input id="c" value="5">`; r.oninput=c.oninput=()=>drawGrid(+r.value,+c.value); drawGrid(5,5);}
-  if(shape==="ring"){controls.innerHTML=`Nodes <input id="n" type="range" min="3" max="40" value="12">`; n.oninput=()=>drawRing(+n.value); drawRing(12);}
-  if(shape==="star"){controls.innerHTML=`Nodes <input id="n" type="range" min="5" max="30" value="7">`; n.oninput=()=>drawStar(+n.value); drawStar(7);}
+  if(shape==="grid"){
+    controls.innerHTML=`Rows <input id="r" value="5"> Cols <input id="c" value="5">`;
+    r.oninput=c.oninput=()=>drawGrid(+r.value,+c.value);
+    drawGrid(5,5);
+  }
+  if(shape==="ring"){
+    controls.innerHTML=`Nodes <input id="n" type="number" value="12" min="3">`;
+    n.oninput=()=>drawRing(+n.value);
+    drawRing(12);
+  }
+  if(shape==="star"){
+    controls.innerHTML=`Spikes <input id="s" type="number" value="5" min="3">`;
+    s.oninput=()=>drawStar(+s.value);
+    drawStar(5);
+  }
 }
 
 updateControls();
