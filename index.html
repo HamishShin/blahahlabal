@@ -2,360 +2,303 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Lights Out Graph Builder</title>
+<title>Graph Lights Puzzle</title>
+
 <style>
 body {
-  background: #111;
-  color: white;
-  font-family: sans-serif;
-  text-align: center;
+  background:#111;
+  color:white;
+  font-family:sans-serif;
+  text-align:center;
 }
+
 svg {
-  background: #1a1a1a;
-  border-radius: 10px;
-  margin-top: 10px;
-  cursor: crosshair;
+  background:#1a1a1a;
+  border-radius:10px;
+  margin-top:10px;
 }
-circle { cursor: pointer; }
+
+circle {
+  cursor:pointer;
+  transition:fill 0.15s;
+}
+
+line, path {
+  stroke:#777;
+  stroke-width:2;
+}
+
 text {
-  pointer-events: none;
-  font-size: 14px;
-  font-weight: bold;
-  fill: grey;
-  text-anchor: middle;
-  dominant-baseline: middle;
+  pointer-events:none;
+  font-size:14px;
+  font-weight:bold;
+  fill:black;
+  text-anchor:middle;
+  dominant-baseline:middle;
 }
-button, select, input { margin: 5px; }
+
+button, select, input {
+  margin:4px;
+}
+
+#matrixPanel {
+  display:none;
+  margin:12px auto;
+  width:220px;
+  background:#222;
+  padding:10px;
+  border-radius:8px;
+  font-family:monospace;
+}
 </style>
 </head>
+
 <body>
 
-<h2>Lights Out Graph Builder</h2>
+<h2>Graph Lights Puzzle</h2>
 
-<select id="graphMode">
+<select id="modeSelect">
   <option value="grid">Grid</option>
   <option value="ring">Ring</option>
   <option value="custom">Custom</option>
 </select>
 
-<!-- Global Mode toggle button -->
 <button id="modeBtn">Mode: PLAY</button>
+<button id="displayBtn">Display: Colors</button>
 
-<!-- Custom mode buttons -->
-<div id="customControls" style="margin:5px;">
-  <button id="editToggleBtn">Start Editing</button>
-  <button id="addNodeBtn">Add Node</button>
-  <button id="addEdgeBtn">Add Edge</button>
+States (k):
+<input type="number" id="kInput" value="3" min="2" max="9">
+
+<br>
+
+<button id="randomBtn">Randomize</button>
+<button id="linearBtn">Linearize</button>
+
+<div id="controls"></div>
+
+<svg id="svg" width="400" height="400"></svg>
+
+<div id="matrixPanel">
+  <h4>Matrix (N × 1)</h4>
+  <pre id="rawMatrix"></pre>
+  <h4>Matrix mod k</h4>
+  <pre id="modMatrix"></pre>
 </div>
-
-<!-- Preset graph controls (grid/ring) -->
-<div id="presetControls" style="margin:5px;"></div>
-
-<!-- Shared controls -->
-<div style="margin:5px;">
-  <button id="randomBtn">Randomize</button>
-  <button id="displayBtn">Display: COLORS</button>
-  <button id="linearBtn">Linearize</button>
-  States (k):
-  <input type="number" id="stateCount" value="2" min="2" max="8">
-</div>
-
-<svg id="svg" width="600" height="600"></svg>
 
 <script>
-const svg=document.getElementById("svg");
-const customControls=document.getElementById("customControls");
-const presetControls=document.getElementById("presetControls");
+/* ---------- GLOBALS ---------- */
 
-const SIZE=600;
-const R=12;
-const COLORS=["#ff0000","#0000ff","#00ff00","#ffff00","#ff00ff","#00ffff","#","#ff8800"];
+const svg = document.getElementById("svg");
+const SIZE = 400;
+const R = 12;
 
-let nodes=[], labels=[];
-let positions=[], originalPositions=[];
-let edges=new Set();
+let nodes = [];
+let edges = [];
+let adjacency = () => [];
 
-let editMode=false; // Global edit/play mode
-let displayMode="colors";
-let k=2;
-let linear=false;
-let graphType="grid";
+let editMode = false;
+let showNumbers = false;
+let kStates = 3;
 
-let customEditing=false; // start/stop editing in custom mode
-let addingNode=false;
-let addingEdge=false;
-let edgeStart=null;
+let linearOrder = [];
+let pressVectors = [];
+let pressMatrix = [];
+
+/* ---------- COLORS ---------- */
+
+function colorFor(v) {
+  const hues = [0, 220, 120, 40, 300, 180];
+  return `hsl(${hues[v % hues.length]},80%,50%)`;
+}
 
 /* ---------- CORE ---------- */
-function reset(){
-  svg.innerHTML="";
-  nodes=[]; labels=[];
-  positions=[]; originalPositions=[];
-  edges.clear();
+
+function clearAll() {
+  svg.innerHTML = "";
+  nodes = [];
+  edges = [];
 }
 
-function adjacency(i){
-  const a=[i];
-  edges.forEach(e=>{
-    const [x,y]=e.split("-").map(Number);
-    if(x===i)a.push(y);
-    if(y===i)a.push(x);
+function drawEdges() {
+  svg.querySelectorAll("line").forEach(l => l.remove());
+  edges.forEach(e => {
+    const l = document.createElementNS("http://www.w3.org/2000/svg","line");
+    l.setAttribute("x1",nodes[e[0]].x);
+    l.setAttribute("y1",nodes[e[0]].y);
+    l.setAttribute("x2",nodes[e[1]].x);
+    l.setAttribute("y2",nodes[e[1]].y);
+    svg.insertBefore(l, svg.firstChild);
   });
-  return a;
 }
 
-function createNode(x,y){
-  const i=nodes.length;
-  positions[i]={x,y};
-  originalPositions[i]={x,y};
+function updateNode(n) {
+  n.c.setAttribute("fill", colorFor(n.state));
+  if (showNumbers) {
+    n.t.textContent = n.state;
+    n.t.setAttribute("x",n.x);
+    n.t.setAttribute("y",n.y);
+  } else {
+    n.t.textContent = "";
+  }
+}
 
-  const c=document.createElementNS("http://www.w3.org/2000/svg","circle");
+function toggleSingle(i) {
+  nodes[i].state = (nodes[i].state + 1) % kStates;
+  updateNode(nodes[i]);
+}
+
+function toggleWithNeighbors(i) {
+  adjacency(i).forEach(j => toggleSingle(j));
+  applyPress(i);
+}
+
+/* ---------- NODE ---------- */
+
+function addNode(x,y) {
+  const c = document.createElementNS("http://www.w3.org/2000/svg","circle");
   c.setAttribute("cx",x);
   c.setAttribute("cy",y);
   c.setAttribute("r",R);
-  c.dataset.state="0";
 
-  const t=document.createElementNS("http://www.w3.org/2000/svg","text");
-  t.setAttribute("x",x);
-  t.setAttribute("y",y);
+  const t = document.createElementNS("http://www.w3.org/2000/svg","text");
 
-  c.onclick=e=>{
-    e.stopPropagation();
+  const node = {x,y,state:2,c,t};
+  const index = nodes.length;
 
-    // Custom editing mode: do nothing but Add Edge logic
-    if(graphType==="custom" && customEditing && addingEdge){
-      if(edgeStart===null){
-        edgeStart=i;
-        c.setAttribute("stroke","white");
-        c.setAttribute("stroke-width","3");
-      } else if(edgeStart!==i){
-        edges.add([Math.min(edgeStart,i),Math.max(edgeStart,i)].join("-"));
-        clearEdgeSelection();
-        drawEdges();
-      }
-      return;
-    }
-
-    // If global edit mode is active, increment only this node
-    if(editMode){
-      increment(i);
-      return;
-    }
-
-    // PLAY mode: increment this node and neighbors
-    adjacency(i).forEach(increment);
+  c.onclick = () => {
+    if (editMode) toggleSingle(index);
+    else toggleWithNeighbors(index);
   };
 
   svg.appendChild(c);
   svg.appendChild(t);
-  nodes.push(c);
-  labels.push(t);
-  update(i);
-  drawEdges();
+  nodes.push(node);
+  updateNode(node);
 }
 
-function increment(i){
-  nodes[i].dataset.state=(+nodes[i].dataset.state+1)%k;
-  update(i);
+/* ---------- GRID ---------- */
+
+function drawGrid(r,c) {
+  clearAll();
+  const dx = SIZE/(c+1);
+  const dy = SIZE/(r+1);
+
+  for(let y=0;y<r;y++)
+    for(let x=0;x<c;x++)
+      addNode(dx*(x+1),dy*(y+1));
+
+  adjacency = i => {
+    const rr=Math.floor(i/c), cc=i%c;
+    const a=[i];
+    if(rr>0)a.push(i-c);
+    if(rr<r-1)a.push(i+c);
+    if(cc>0)a.push(i-1);
+    if(cc<c-1)a.push(i+1);
+    return a;
+  };
 }
 
-function update(i){
-  const s=+nodes[i].dataset.state;
-  nodes[i].setAttribute("fill",COLORS[s%COLORS.length]);
-  labels[i].textContent=s;
-  labels[i].style.display=displayMode==="numbers"?"block":"none";
-}
+/* ---------- RING ---------- */
 
-/* ---------- EDGES ---------- */
-function drawEdges(){
-  const old=svg.querySelector("g");
-  if(old) old.remove();
-  const g=document.createElementNS("http://www.w3.org/2000/svg","g");
+function drawRing(n) {
+  clearAll();
+  const cx=SIZE/2, cy=SIZE/2, rad=140;
 
-  edges.forEach(e=>{
-    const [i,j]=e.split("-").map(Number);
-    const p=positions[i], q=positions[j];
-
-    if(!linear){
-      const l=document.createElementNS("http://www.w3.org/2000/svg","line");
-      l.setAttribute("x1",p.x);
-      l.setAttribute("y1",p.y);
-      l.setAttribute("x2",q.x);
-      l.setAttribute("y2",q.y);
-      l.setAttribute("stroke","#666");
-      l.setAttribute("stroke-width","2");
-      g.appendChild(l);
-    } else {
-      const d=Math.abs(i-j);
-      const cx=SIZE/2+160+d*35;
-      const cy=(p.y+q.y)/2;
-      const path=document.createElementNS("http://www.w3.org/2000/svg","path");
-      path.setAttribute("d",`M ${p.x} ${p.y} Q ${cx} ${cy} ${q.x} ${q.y}`);
-      path.setAttribute("fill","none");
-      path.setAttribute("stroke","#888");
-      path.setAttribute("stroke-width","2");
-      g.appendChild(path);
-    }
-  });
-
-  svg.prepend(g);
-}
-
-function clearEdgeSelection(){
-  nodes.forEach(n=>n.removeAttribute("stroke"));
-  edgeStart=null;
-}
-
-/* ---------- PRESET GRAPHS ---------- */
-function buildGrid(r,c){
-  reset();
-  const sx=80, sy=80;
-  const ox=SIZE/2-(c-1)*sx/2;
-  const oy=SIZE/2-(r-1)*sy/2;
-
-  for(let i=0;i<r;i++)
-    for(let j=0;j<c;j++)
-      createNode(ox+j*sx,oy+i*sy);
-
-  const n=r*c;
-  for(let i=0;i<n;i++){
-    const row=Math.floor(i/c), col=i%c;
-    if(row<r-1) edges.add(`${i}-${i+c}`);
-    if(col<c-1) edges.add(`${i}-${i+1}`);
-  }
-  drawEdges();
-}
-
-function buildRing(n){
-  reset();
-  const cx=SIZE/2, cy=SIZE/2, rad=200;
-  for(let i=0;i<n;i++){
+  for(let i=0;i<n;i++) {
     const a=2*Math.PI*i/n;
-    createNode(cx+Math.cos(a)*rad,cy+Math.sin(a)*rad);
+    addNode(cx+rad*Math.cos(a),cy+rad*Math.sin(a));
   }
-  for(let i=0;i<n;i++)
-    edges.add(`${i}-${(i+1)%n}`);
-  drawEdges();
+
+  adjacency = i => [
+    i,(i-1+n)%n,(i+1)%n
+  ];
 }
 
 /* ---------- LINEARIZATION ---------- */
-function animateLinearize(){
-  const start=positions.map(p=>({...p}));
-  const end=[];
-  const x=SIZE/2, sp=SIZE/(nodes.length+1);
 
-  if(!linear){
-    for(let i=0;i<nodes.length;i++) end[i]={x,y:sp*(i+1)};
-  } else {
-    for(let i=0;i<nodes.length;i++) end[i]={...originalPositions[i]};
-  }
+function linearize() {
+  linearOrder = nodes.map((_,i)=>i);
 
-  linear=!linear;
-  const t0=performance.now(), dur=700;
+  nodes.forEach((n,i)=>{
+    n.x = SIZE/2;
+    n.y = 40 + i*(SIZE-80)/(nodes.length-1||1);
+    n.c.setAttribute("cx",n.x);
+    n.c.setAttribute("cy",n.y);
+    n.t.setAttribute("x",n.x);
+    n.t.setAttribute("y",n.y);
+  });
 
-  function step(t){
-    const u=Math.min((t-t0)/dur,1);
-    const s=u*u*(3-2*u);
-    nodes.forEach((n,i)=>{
-      const x=start[i].x+(end[i].x-start[i].x)*s;
-      const y=start[i].y+(end[i].y-start[i].y)*s;
-      positions[i]={x,y};
-      n.setAttribute("cx",x);
-      n.setAttribute("cy",y);
-      labels[i].setAttribute("x",x);
-      labels[i].setAttribute("y",y);
+  buildPressVectors();
+  startMatrix();
+}
+
+/* ---------- MATRICES ---------- */
+
+function buildPressVectors() {
+  pressVectors = [];
+  const N = nodes.length;
+
+  for(let i=0;i<N;i++) {
+    const v = Array(N).fill(0);
+    adjacency(i).forEach(j=>{
+      const idx = linearOrder.indexOf(j);
+      v[idx]=1;
     });
-    drawEdges();
-    if(u<1) requestAnimationFrame(step);
+    pressVectors.push(v);
   }
-  requestAnimationFrame(step);
+}
+
+function startMatrix() {
+  pressMatrix = nodes.map(n=>n.state);
+  document.getElementById("matrixPanel").style.display="block";
+  updateMatrix();
+}
+
+function applyPress(i) {
+  if (!pressVectors.length) return;
+  const v = pressVectors[linearOrder.indexOf(i)];
+  for(let j=0;j<v.length;j++) pressMatrix[j]+=v[j];
+  updateMatrix();
+}
+
+function updateMatrix() {
+  const raw = pressMatrix.map(v=>`[ ${v} ]`).join("\n");
+  const mod = pressMatrix.map(v=>`[ ${((v%kStates)+kStates)%kStates} ]`).join("\n");
+  rawMatrix.textContent = raw;
+  modMatrix.textContent = mod;
 }
 
 /* ---------- UI ---------- */
 
-// Global Mode toggle button
-const modeBtn = document.getElementById("modeBtn");
 modeBtn.onclick = () => {
-  editMode = !editMode;
-  modeBtn.textContent = `Mode: ${editMode ? "EDIT" : "PLAY"}`;
+  editMode=!editMode;
+  modeBtn.textContent = `Mode: ${editMode?"EDIT":"PLAY"}`;
 };
 
-// Custom mode Start/Stop Editing button
-const editToggleBtn = document.getElementById("editToggleBtn");
-editToggleBtn.onclick = () => {
-  customEditing = !customEditing;
-  editToggleBtn.textContent = customEditing ? "Stop Editing" : "Start Editing";
-  addingNode = customEditing;
-  addingEdge = customEditing;
-  if(customEditing){
-    modeBtn.disabled = true; // disable global edit/play while editing
-  } else {
-    addingNode = false;
-    addingEdge = false;
-    modeBtn.disabled = false; // re-enable global edit/play
-    clearEdgeSelection();
-  }
+displayBtn.onclick = () => {
+  showNumbers=!showNumbers;
+  displayBtn.textContent = `Display: ${showNumbers?"Numbers":"Colors"}`;
+  nodes.forEach(updateNode);
 };
 
-// Custom mode Add Node / Add Edge
-const addNodeBtn=document.getElementById("addNodeBtn");
-const addEdgeBtn=document.getElementById("addEdgeBtn");
-addNodeBtn.onclick=()=>{addingNode=true;addingEdge=false;clearEdgeSelection()};
-addEdgeBtn.onclick=()=>{addingEdge=true;addingNode=false;clearEdgeSelection()};
+kInput.onchange = e => kStates = +e.target.value;
 
-// Shared buttons
-document.getElementById("randomBtn").onclick=()=>nodes.forEach((_,i)=>{nodes[i].dataset.state=Math.floor(Math.random()*k);update(i)});
-document.getElementById("displayBtn").onclick=()=>{
-  displayMode=displayMode==="colors"?"numbers":"colors";
-  document.getElementById("displayBtn").textContent=`Display: ${displayMode.toUpperCase()}`;
-  nodes.forEach((_,i)=>update(i));
-};
-document.getElementById("linearBtn").onclick=animateLinearize;
-document.getElementById("stateCount").onchange=e=>{
-  k=Math.max(2,+e.target.value);
-  nodes.forEach((n,i)=>{n.dataset.state%=k;update(i)});
+randomBtn.onclick = () => {
+  nodes.forEach(n=>{
+    n.state=Math.floor(Math.random()*kStates);
+    updateNode(n);
+  });
 };
 
-// Graph selection
-graphMode.onchange=()=>{
-  graphType=graphMode.value;
-  presetControls.innerHTML="";
-  customControls.style.display=graphType==="custom"?"block":"none";
+linearBtn.onclick = linearize;
 
-  addingNode=false; addingEdge=false;
-  customEditing=false;
-  editToggleBtn.textContent = "Start Editing";
-
-  if(graphType==="grid"){
-    presetControls.innerHTML=`Rows <input id="r" value="5" min="1"> Cols <input id="c" value="5" min="1">`;
-    r.oninput=c.oninput=()=>buildGrid(+r.value,+c.value);
-    buildGrid(5,5);
-  }
-  if(graphType==="ring"){
-    presetControls.innerHTML=`Nodes: <input type="range" id="n" min="3" max="40" value="12"> <span id="nLabel">12</span>`;
-    const nSlider=document.getElementById("n");
-    const nLabel=document.getElementById("nLabel");
-    nSlider.oninput=()=>{
-      nLabel.textContent=nSlider.value;
-      buildRing(+nSlider.value);
-    };
-    buildRing(12);
-  }
-  if(graphType==="custom"){
-    reset();
-  }
+modeSelect.onchange = e => {
+  document.getElementById("matrixPanel").style.display="none";
+  if(e.target.value==="grid") drawGrid(5,5);
+  if(e.target.value==="ring") drawRing(12);
 };
 
-// Custom mode: click to add node
-svg.onclick=e=>{
-  if(graphType==="custom" && addingNode && customEditing){
-    const r=svg.getBoundingClientRect();
-    createNode(e.clientX-r.left,e.clientY-r.top);
-  }
-};
-
-// Initialize
-graphMode.onchange();
+drawGrid(5,5);
 </script>
 
 </body>
