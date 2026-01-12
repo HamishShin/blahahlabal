@@ -38,25 +38,32 @@
   <option value="custom">Custom</option>
 </select>
 
-<button id="startBtn">Start Game</button>
-<button id="stopBtn">Stop Game</button>
-<button id="addNodeBtn">Add Node</button>
-<button id="addEdgeBtn">Add Edge</button>
-<button id="randomBtn">Randomize</button>
-<button id="displayBtn">Display: COLORS</button>
-<button id="linearBtn">Linearize</button>
+<!-- Custom mode only buttons -->
+<div id="customControls" style="margin:5px;">
+  <button id="startBtn">Start Game</button>
+  <button id="stopBtn">Stop Game</button>
+  <button id="addNodeBtn">Add Node</button>
+  <button id="addEdgeBtn">Add Edge</button>
+</div>
 
-<br>
-States (k):
-<input type="number" id="stateCount" value="2" min="2" max="8">
+<!-- Preset graph controls (grid/ring) -->
+<div id="presetControls" style="margin:5px;"></div>
 
-<div id="controls"></div>
+<!-- Shared controls -->
+<div style="margin:5px;">
+  <button id="randomBtn">Randomize</button>
+  <button id="displayBtn">Display: COLORS</button>
+  <button id="linearBtn">Linearize</button>
+  States (k):
+  <input type="number" id="stateCount" value="2" min="2" max="8">
+</div>
 
 <svg id="svg" width="600" height="600"></svg>
 
 <script>
 const svg=document.getElementById("svg");
-const controls=document.getElementById("controls");
+const customControls=document.getElementById("customControls");
+const presetControls=document.getElementById("presetControls");
 
 const SIZE=600;
 const R=12;
@@ -77,7 +84,6 @@ let addingEdge=false;
 let edgeStart=null;
 
 /* ---------- CORE ---------- */
-
 function reset(){
   svg.innerHTML="";
   nodes=[]; labels=[];
@@ -112,6 +118,7 @@ function createNode(x,y){
 
   c.onclick=e=>{
     e.stopPropagation();
+
     if(!editMode){
       adjacency(i).forEach(increment);
       return;
@@ -128,10 +135,6 @@ function createNode(x,y){
         drawEdges();
       }
       return;
-    }
-
-    if(addingNode){
-      // do nothing special; nodes are added via click
     }
   };
 
@@ -156,10 +159,9 @@ function update(i){
 }
 
 /* ---------- EDGES ---------- */
-
 function drawEdges(){
   const old=svg.querySelector("g");
-  if(old)old.remove();
+  if(old) old.remove();
   const g=document.createElementNS("http://www.w3.org/2000/svg","g");
 
   edges.forEach(e=>{
@@ -191,8 +193,12 @@ function drawEdges(){
   svg.prepend(g);
 }
 
-/* ---------- PRESET GRAPHS ---------- */
+function clearEdgeSelection(){
+  nodes.forEach(n=>n.removeAttribute("stroke"));
+  edgeStart=null;
+}
 
+/* ---------- PRESET GRAPHS ---------- */
 function buildGrid(r,c){
   reset();
   const sx=80, sy=80;
@@ -225,7 +231,6 @@ function buildRing(n){
 }
 
 /* ---------- LINEARIZATION ---------- */
-
 function animateLinearize(){
   const start=positions.map(p=>({...p}));
   const end=[];
@@ -243,7 +248,6 @@ function animateLinearize(){
   function step(t){
     const u=Math.min((t-t0)/dur,1);
     const s=u*u*(3-2*u);
-
     nodes.forEach((n,i)=>{
       const x=start[i].x+(end[i].x-start[i].x)*s;
       const y=start[i].y+(end[i].y-start[i].y)*s;
@@ -261,68 +265,52 @@ function animateLinearize(){
 
 /* ---------- UI ---------- */
 
-function clearEdgeSelection(){
-  nodes.forEach(n=>n.removeAttribute("stroke"));
-  edgeStart=null;
-}
-
-// Mode toggle
-modeBtn.onclick=()=>{
-  editMode=!editMode;
-  modeBtn.textContent=`Mode: ${editMode?"EDIT":"PLAY"}`;
-};
-
-// Start / Stop buttons
+// Custom mode buttons
 document.getElementById("startBtn").onclick=()=>{
   editMode=false;
   addingNode=false;
   addingEdge=false;
-  modeBtn.textContent="Mode: PLAY";
 };
 document.getElementById("stopBtn").onclick=()=>{
   editMode=true;
-  modeBtn.textContent="Mode: EDIT";
 };
-
-// Node / Edge buttons
 addNodeBtn.onclick=()=>{addingNode=true;addingEdge=false;clearEdgeSelection()};
 addEdgeBtn.onclick=()=>{addingEdge=true;addingNode=false;clearEdgeSelection()};
 
-// SVG click for custom nodes
-svg.onclick=e=>{
-  if(graphType==="custom" && addingNode){
-    const r=svg.getBoundingClientRect();
-    createNode(e.clientX-r.left,e.clientY-r.top);
-  }
-};
-
-// Randomize / display / states / linearize
-randomBtn.onclick=()=>nodes.forEach((_,i)=>{nodes[i].dataset.state=Math.floor(Math.random()*k);update(i)});
-displayBtn.onclick=()=>{
+// Shared buttons
+document.getElementById("randomBtn").onclick=()=>nodes.forEach((_,i)=>{nodes[i].dataset.state=Math.floor(Math.random()*k);update(i)});
+document.getElementById("displayBtn").onclick=()=>{
   displayMode=displayMode==="colors"?"numbers":"colors";
-  displayBtn.textContent=`Display: ${displayMode.toUpperCase()}`;
+  document.getElementById("displayBtn").textContent=`Display: ${displayMode.toUpperCase()}`;
   nodes.forEach((_,i)=>update(i));
 };
-stateCount.onchange=e=>{
+document.getElementById("linearBtn").onclick=animateLinearize;
+document.getElementById("stateCount").onchange=e=>{
   k=Math.max(2,+e.target.value);
   nodes.forEach((n,i)=>{n.dataset.state%=k;update(i)});
 };
-linearBtn.onclick=animateLinearize;
 
-/* ---------- Graph selection ---------- */
+// Graph selection
 graphMode.onchange=()=>{
   graphType=graphMode.value;
-  controls.innerHTML="";
+  presetControls.innerHTML="";
+  customControls.style.display=graphType==="custom"?"block":"none";
+
   addingNode=false; addingEdge=false;
 
   if(graphType==="grid"){
-    controls.innerHTML=`Rows <input id="r" value="5"> Cols <input id="c" value="5">`;
+    presetControls.innerHTML=`Rows <input id="r" value="5" min="1"> Cols <input id="c" value="5" min="1">`;
     r.oninput=c.oninput=()=>buildGrid(+r.value,+c.value);
     buildGrid(5,5);
   }
   if(graphType==="ring"){
-    controls.innerHTML=`Nodes <input id="n" value="12" min="3">`;
-    n.oninput=()=>buildRing(+n.value);
+    presetControls.innerHTML=`Nodes: <input type="range" id="n" min="3" max="40" value="12"> <span id="nLabel">12</span>`;
+    const nSlider=document.getElementById("n");
+    const nLabel=document.getElementById("nLabel");
+    nSlider.oninput=()=>{
+      nLabel.textContent=nSlider.value;
+      buildRing(+nSlider.value);
+    };
     buildRing(12);
   }
   if(graphType==="custom"){
@@ -330,9 +318,17 @@ graphMode.onchange=()=>{
   }
 };
 
+// Custom mode: click to add node
+svg.onclick=e=>{
+  if(graphType==="custom" && addingNode){
+    const r=svg.getBoundingClientRect();
+    createNode(e.clientX-r.left,e.clientY-r.top);
+  }
+};
+
 // Initialize
 graphMode.onchange();
-
 </script>
+
 </body>
 </html>
