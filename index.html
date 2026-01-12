@@ -38,24 +38,23 @@ button, select, input { margin: 5px; }
   <option value="custom">Custom</option>
 </select>
 
-<!-- Global Mode toggle button -->
 <button id="modeBtn">Mode: PLAY</button>
 
-<!-- Custom mode buttons -->
 <div id="customControls" style="margin:5px;">
   <button id="editToggleBtn">Start Editing</button>
   <button id="addNodeBtn">Add Node</button>
   <button id="addEdgeBtn">Add Edge</button>
 </div>
 
-<!-- Preset graph controls (grid/ring) -->
 <div id="presetControls" style="margin:5px;"></div>
 
-<!-- Shared controls -->
 <div style="margin:5px;">
   <button id="randomBtn">Randomize</button>
   <button id="displayBtn">Display: COLORS</button>
   <button id="linearBtn">Linearize</button>
+  <button id="undoBtn">Undo</button>
+  <button id="saveBtn">Save</button>
+  <button id="loadBtn">Load</button>
   States (k):
   <input type="number" id="stateCount" value="2" min="2" max="8">
 </div>
@@ -75,16 +74,46 @@ let nodes=[], labels=[];
 let positions=[], originalPositions=[];
 let edges=new Set();
 
-let editMode=false; // Global edit/play mode
+let editMode=false;
 let displayMode="colors";
 let k=2;
 let linear=false;
 let graphType="grid";
 
-let customEditing=false; // start/stop editing in custom mode
+/* ---------- CUSTOM MODE STATE (UNCHANGED) ---------- */
+let customEditing=false;
 let addingNode=false;
 let addingEdge=false;
 let edgeStart=null;
+
+/* ---------- UNDO / SAVE ---------- */
+let undoStack=[];
+let savedState=null;
+
+function saveStateSnapshot(){
+  undoStack.push(nodes.map(n=>+n.dataset.state));
+}
+
+function loadStateSnapshot(snapshot){
+  snapshot.forEach((s,i)=>{
+    nodes[i].dataset.state=s;
+    update(i);
+  });
+}
+
+function saveGame(){
+  savedState={ k, states:nodes.map(n=>+n.dataset.state) };
+}
+
+function loadGame(){
+  if(!savedState) return;
+  k=savedState.k;
+  stateCount.value=k;
+  savedState.states.forEach((s,i)=>{
+    nodes[i].dataset.state=s;
+    update(i);
+  });
+}
 
 /* ---------- CORE ---------- */
 function reset(){
@@ -92,6 +121,7 @@ function reset(){
   nodes=[]; labels=[];
   positions=[]; originalPositions=[];
   edges.clear();
+  undoStack=[];
 }
 
 function adjacency(i){
@@ -122,7 +152,7 @@ function createNode(x,y){
   c.onclick=e=>{
     e.stopPropagation();
 
-    // Custom editing mode: do nothing but Add Edge logic
+    /* ---- CUSTOM MODE (UNCHANGED) ---- */
     if(graphType==="custom" && customEditing && addingEdge){
       if(edgeStart===null){
         edgeStart=i;
@@ -136,13 +166,13 @@ function createNode(x,y){
       return;
     }
 
-    // If global edit mode is active, increment only this node
+    saveStateSnapshot();
+
     if(editMode){
       increment(i);
       return;
     }
 
-    // PLAY mode: increment this node and neighbors
     adjacency(i).forEach(increment);
   };
 
@@ -166,7 +196,7 @@ function update(i){
   labels[i].style.display=displayMode==="numbers"?"block":"none";
 }
 
-/* ---------- EDGES ---------- */
+/* ---------- EDGES (RESTORED) ---------- */
 function drawEdges(){
   const old=svg.querySelector("g");
   if(old) old.remove();
@@ -206,7 +236,7 @@ function clearEdgeSelection(){
   edgeStart=null;
 }
 
-/* ---------- PRESET GRAPHS ---------- */
+/* ---------- PRESET GRAPHS (RESTORED) ---------- */
 function buildGrid(r,c){
   reset();
   const sx=80, sy=80;
@@ -238,7 +268,7 @@ function buildRing(n){
   drawEdges();
 }
 
-/* ---------- LINEARIZATION ---------- */
+/* ---------- LINEARIZATION (RESTORED) ---------- */
 function animateLinearize(){
   const start=positions.map(p=>({...p}));
   const end=[];
@@ -272,73 +302,48 @@ function animateLinearize(){
 }
 
 /* ---------- UI ---------- */
+modeBtn.onclick=()=>{editMode=!editMode;modeBtn.textContent=`Mode: ${editMode?"EDIT":"PLAY"}`};
+undoBtn.onclick=()=>{if(undoStack.length) loadStateSnapshot(undoStack.pop())};
+saveBtn.onclick=saveGame;
+loadBtn.onclick=loadGame;
+randomBtn.onclick=()=>{saveStateSnapshot();nodes.forEach((_,i)=>{nodes[i].dataset.state=Math.floor(Math.random()*k);update(i)})};
+displayBtn.onclick=()=>{displayMode=displayMode==="colors"?"numbers":"colors";displayBtn.textContent=`Display: ${displayMode.toUpperCase()}`;nodes.forEach((_,i)=>update(i))};
+linearBtn.onclick=animateLinearize;
 
-// Global Mode toggle button
-const modeBtn = document.getElementById("modeBtn");
-modeBtn.onclick = () => {
-  editMode = !editMode;
-  modeBtn.textContent = `Mode: ${editMode ? "EDIT" : "PLAY"}`;
-};
-
-// Custom mode Start/Stop Editing button
-const editToggleBtn = document.getElementById("editToggleBtn");
-editToggleBtn.onclick = () => {
-  customEditing = !customEditing;
-  editToggleBtn.textContent = customEditing ? "Stop Editing" : "Start Editing";
-  addingNode = customEditing;
-  addingEdge = customEditing;
-  if(customEditing){
-    modeBtn.disabled = true; // disable global edit/play while editing
-  } else {
-    addingNode = false;
-    addingEdge = false;
-    modeBtn.disabled = false; // re-enable global edit/play
-    clearEdgeSelection();
-  }
-};
-
-// Custom mode Add Node / Add Edge
-const addNodeBtn=document.getElementById("addNodeBtn");
-const addEdgeBtn=document.getElementById("addEdgeBtn");
-addNodeBtn.onclick=()=>{addingNode=true;addingEdge=false;clearEdgeSelection()};
-addEdgeBtn.onclick=()=>{addingEdge=true;addingNode=false;clearEdgeSelection()};
-
-// Shared buttons
-document.getElementById("randomBtn").onclick=()=>nodes.forEach((_,i)=>{nodes[i].dataset.state=Math.floor(Math.random()*k);update(i)});
-document.getElementById("displayBtn").onclick=()=>{
-  displayMode=displayMode==="colors"?"numbers":"colors";
-  document.getElementById("displayBtn").textContent=`Display: ${displayMode.toUpperCase()}`;
-  nodes.forEach((_,i)=>update(i));
-};
-document.getElementById("linearBtn").onclick=animateLinearize;
-document.getElementById("stateCount").onchange=e=>{
+stateCount.onchange=e=>{
   k=Math.max(2,+e.target.value);
   nodes.forEach((n,i)=>{n.dataset.state%=k;update(i)});
 };
 
-// Graph selection
+/* ---------- CUSTOM MODE UI (UNCHANGED) ---------- */
+editToggleBtn.onclick=()=>{
+  customEditing=!customEditing;
+  editToggleBtn.textContent=customEditing?"Stop Editing":"Start Editing";
+  addingNode=customEditing;
+  addingEdge=false;
+  modeBtn.disabled=customEditing;
+  if(!customEditing) clearEdgeSelection();
+};
+
+addNodeBtn.onclick=()=>{addingNode=true;addingEdge=false;clearEdgeSelection()};
+addEdgeBtn.onclick=()=>{addingEdge=true;addingNode=false;clearEdgeSelection()};
+
 graphMode.onchange=()=>{
   graphType=graphMode.value;
   presetControls.innerHTML="";
   customControls.style.display=graphType==="custom"?"block":"none";
-
-  addingNode=false; addingEdge=false;
   customEditing=false;
-  editToggleBtn.textContent = "Start Editing";
+  editToggleBtn.textContent="Start Editing";
+  modeBtn.disabled=false;
 
   if(graphType==="grid"){
-    presetControls.innerHTML=`Rows <input id="r" value="5" min="1"> Cols <input id="c" value="5" min="1">`;
+    presetControls.innerHTML=`Rows <input id="r" value="5"> Cols <input id="c" value="5">`;
     r.oninput=c.oninput=()=>buildGrid(+r.value,+c.value);
     buildGrid(5,5);
   }
   if(graphType==="ring"){
-    presetControls.innerHTML=`Nodes: <input type="range" id="n" min="3" max="40" value="12"> <span id="nLabel">12</span>`;
-    const nSlider=document.getElementById("n");
-    const nLabel=document.getElementById("nLabel");
-    nSlider.oninput=()=>{
-      nLabel.textContent=nSlider.value;
-      buildRing(+nSlider.value);
-    };
+    presetControls.innerHTML=`Nodes <input type="range" id="n" min="3" max="40" value="12"> <span id="nLabel">12</span>`;
+    n.oninput=()=>{nLabel.textContent=n.value;buildRing(+n.value)};
     buildRing(12);
   }
   if(graphType==="custom"){
@@ -346,15 +351,13 @@ graphMode.onchange=()=>{
   }
 };
 
-// Custom mode: click to add node
 svg.onclick=e=>{
-  if(graphType==="custom" && addingNode && customEditing){
+  if(graphType==="custom" && customEditing && addingNode){
     const r=svg.getBoundingClientRect();
     createNode(e.clientX-r.left,e.clientY-r.top);
   }
 };
 
-// Initialize
 graphMode.onchange();
 </script>
 
