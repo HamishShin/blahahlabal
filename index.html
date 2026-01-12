@@ -46,7 +46,7 @@ button, select, input { margin: 5px; }
   <button id="addEdgeBtn">Add Edge</button>
 </div>
 
-<div id="presetControls" style="margin:5px;"></div>
+<div id="presetControls" style="margin:5px"></div>
 
 <div style="margin:5px;">
   <button id="randomBtn">Randomize</button>
@@ -57,6 +57,9 @@ button, select, input { margin: 5px; }
   <button id="loadBtn">Load</button>
   States (k):
   <input type="number" id="stateCount" value="2" min="2" max="8">
+  <!-- Solver buttons -->
+  <button id="solveBtn">Solve</button>
+  <button id="unsolveBtn">Unsolve</button>
 </div>
 
 <svg id="svg" width="600" height="600"></svg>
@@ -359,6 +362,84 @@ svg.onclick=e=>{
 };
 
 graphMode.onchange();
+
+/* ---------- SOLVER ADDITION ---------- */
+
+let solverActive = false;
+
+function clearSolverMarks(){
+  nodes.forEach(n=>{
+    n.removeAttribute("stroke");
+    n.removeAttribute("stroke-width");
+  });
+  solverActive = false;
+}
+
+function solvePuzzle(){
+  clearSolverMarks();
+
+  if(k !== 2){
+    alert("Solver only supports k = 2");
+    return;
+  }
+
+  const n = nodes.length;
+  if(n === 0) return;
+
+  const A = Array.from({length:n},()=>Array(n).fill(0));
+  for(let i=0;i<n;i++){
+    adjacency(i).forEach(j=>{
+      A[j][i] = 1;
+    });
+  }
+
+  const b = nodes.map(n => (1 - (+n.dataset.state)) & 1);
+  const M = A.map((row,i)=>row.concat(b[i]));
+
+  let row = 0;
+  for(let col=0; col<n && row<n; col++){
+    let pivot = row;
+    while(pivot<n && M[pivot][col]===0) pivot++;
+    if(pivot === n) continue;
+
+    [M[row], M[pivot]] = [M[pivot], M[row]];
+
+    for(let r=0;r<n;r++){
+      if(r!==row && M[r][col]){
+        for(let c=col;c<=n;c++){
+          M[r][c] ^= M[row][c];
+        }
+      }
+    }
+    row++;
+  }
+
+  for(let r=row;r<n;r++){
+    if(M[r][n]){
+      alert("Puzzle is unsolvable");
+      return;
+    }
+  }
+
+  const solution = Array(n).fill(0);
+  for(let i=0;i<row;i++){
+    const lead = M[i].findIndex(v=>v===1);
+    if(lead>=0) solution[lead] = M[i][n];
+  }
+
+  solution.forEach((v,i)=>{
+    if(v){
+      nodes[i].setAttribute("stroke","white");
+      nodes[i].setAttribute("stroke-width","3");
+    }
+  });
+
+  solverActive = true;
+}
+
+solveBtn.onclick = solvePuzzle;
+unsolveBtn.onclick = clearSolverMarks;
+
 </script>
 
 </body>
