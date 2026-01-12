@@ -4,28 +4,28 @@
 <meta charset="UTF-8">
 <title>Lights Out Graph Builder</title>
 <style>
-  body {
-    background: #111;
-    color: white;
-    font-family: sans-serif;
-    text-align: center;
-  }
-  svg {
-    background: #1a1a1a;
-    border-radius: 10px;
-    margin-top: 10px;
-    cursor: crosshair;
-  }
-  circle { cursor: pointer; }
-  text {
-    pointer-events: none;
-    font-size: 14px;
-    font-weight: bold;
-    fill: white;
-    text-anchor: middle;
-    dominant-baseline: middle;
-  }
-  button, select, input { margin: 5px; }
+body {
+  background: #111;
+  color: white;
+  font-family: sans-serif;
+  text-align: center;
+}
+svg {
+  background: #1a1a1a;
+  border-radius: 10px;
+  margin-top: 10px;
+  cursor: crosshair;
+}
+circle { cursor: pointer; }
+text {
+  pointer-events: none;
+  font-size: 14px;
+  font-weight: bold;
+  fill: white;
+  text-anchor: middle;
+  dominant-baseline: middle;
+}
+button, select, input { margin: 5px; }
 </style>
 </head>
 <body>
@@ -38,11 +38,12 @@
   <option value="custom">Custom</option>
 </select>
 
-<!-- Global Mode toggle button (all modes) -->
+<!-- Global Mode toggle button -->
 <button id="modeBtn">Mode: PLAY</button>
 
 <!-- Custom mode buttons -->
 <div id="customControls" style="margin:5px;">
+  <button id="editToggleBtn">Start Editing</button>
   <button id="addNodeBtn">Add Node</button>
   <button id="addEdgeBtn">Add Edge</button>
 </div>
@@ -74,12 +75,13 @@ let nodes=[], labels=[];
 let positions=[], originalPositions=[];
 let edges=new Set();
 
-let editMode=false; // Starts in PLAY mode
+let editMode=false; // Global edit/play mode
 let displayMode="colors";
 let k=2;
 let linear=false;
 let graphType="grid";
 
+let customEditing=false; // start/stop editing in custom mode
 let addingNode=false;
 let addingEdge=false;
 let edgeStart=null;
@@ -120,13 +122,8 @@ function createNode(x,y){
   c.onclick=e=>{
     e.stopPropagation();
 
-    if(editMode){
-      // EDIT mode: increment only this node
-      increment(i);
-      return;
-    }
-
-    if(addingEdge){
+    // Custom editing mode: do nothing but Add Edge logic
+    if(graphType==="custom" && customEditing && addingEdge){
       if(edgeStart===null){
         edgeStart=i;
         c.setAttribute("stroke","white");
@@ -136,6 +133,12 @@ function createNode(x,y){
         clearEdgeSelection();
         drawEdges();
       }
+      return;
+    }
+
+    // If global edit mode is active, increment only this node
+    if(editMode){
+      increment(i);
       return;
     }
 
@@ -277,7 +280,26 @@ modeBtn.onclick = () => {
   modeBtn.textContent = `Mode: ${editMode ? "EDIT" : "PLAY"}`;
 };
 
+// Custom mode Start/Stop Editing button
+const editToggleBtn = document.getElementById("editToggleBtn");
+editToggleBtn.onclick = () => {
+  customEditing = !customEditing;
+  editToggleBtn.textContent = customEditing ? "Stop Editing" : "Start Editing";
+  addingNode = customEditing;
+  addingEdge = customEditing;
+  if(customEditing){
+    modeBtn.disabled = true; // disable global edit/play while editing
+  } else {
+    addingNode = false;
+    addingEdge = false;
+    modeBtn.disabled = false; // re-enable global edit/play
+    clearEdgeSelection();
+  }
+};
+
 // Custom mode Add Node / Add Edge
+const addNodeBtn=document.getElementById("addNodeBtn");
+const addEdgeBtn=document.getElementById("addEdgeBtn");
 addNodeBtn.onclick=()=>{addingNode=true;addingEdge=false;clearEdgeSelection()};
 addEdgeBtn.onclick=()=>{addingEdge=true;addingNode=false;clearEdgeSelection()};
 
@@ -301,6 +323,8 @@ graphMode.onchange=()=>{
   customControls.style.display=graphType==="custom"?"block":"none";
 
   addingNode=false; addingEdge=false;
+  customEditing=false;
+  editToggleBtn.textContent = "Start Editing";
 
   if(graphType==="grid"){
     presetControls.innerHTML=`Rows <input id="r" value="5" min="1"> Cols <input id="c" value="5" min="1">`;
@@ -324,7 +348,7 @@ graphMode.onchange=()=>{
 
 // Custom mode: click to add node
 svg.onclick=e=>{
-  if(graphType==="custom" && addingNode){
+  if(graphType==="custom" && addingNode && customEditing){
     const r=svg.getBoundingClientRect();
     createNode(e.clientX-r.left,e.clientY-r.top);
   }
