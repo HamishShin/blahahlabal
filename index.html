@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Custom Graph Lights Out</title>
+<title>Lights Out Graph Builder</title>
 
 <style>
   body {
@@ -17,9 +17,7 @@
     margin-top: 10px;
     cursor: crosshair;
   }
-  circle {
-    cursor: pointer;
-  }
+  circle { cursor: pointer; }
   text {
     pointer-events: none;
     font-size: 14px;
@@ -28,15 +26,19 @@
     text-anchor: middle;
     dominant-baseline: middle;
   }
-  button, input {
-    margin: 5px;
-  }
+  button, select, input { margin: 5px; }
 </style>
 </head>
 
 <body>
 
-<h2>Custom Graph Lights Out</h2>
+<h2>Lights Out Graph Builder</h2>
+
+<select id="graphMode">
+  <option value="grid">Grid</option>
+  <option value="ring">Ring</option>
+  <option value="custom">Custom</option>
+</select>
 
 <button id="modeBtn">Mode: PLAY</button>
 <button id="addNodeBtn">Add Node</button>
@@ -49,25 +51,27 @@
 States (k):
 <input type="number" id="stateCount" value="2" min="2" max="8">
 
+<div id="controls"></div>
+
 <svg id="svg" width="600" height="600"></svg>
 
 <script>
 const svg = document.getElementById("svg");
+const controls = document.getElementById("controls");
 
 const SIZE = 600;
 const R = 12;
 const COLORS = ["#ff0000","#0000ff","#00ff00","#ffff00","#ff00ff","#00ffff","#ffffff","#ff8800"];
 
-let nodes = [];
-let labels = [];
-let positions = [];
-let originalPositions = [];
+let nodes = [], labels = [];
+let positions = [], originalPositions = [];
 let edges = new Set();
 
 let editMode = false;
 let displayMode = "colors";
 let k = 2;
 let linear = false;
+let graphType = "grid";
 
 let addingNode = false;
 let addingEdge = false;
@@ -75,50 +79,57 @@ let edgeStart = null;
 
 /* ---------- CORE ---------- */
 
+function reset() {
+  svg.innerHTML = "";
+  nodes = [];
+  labels = [];
+  positions = [];
+  originalPositions = [];
+  edges.clear();
+}
+
 function adjacency(i) {
-  const list = [i];
-  edges.forEach(e => {
-    const [a,b] = e.split("-").map(Number);
-    if (a === i) list.push(b);
-    if (b === i) list.push(a);
+  const a = [i];
+  edges.forEach(e=>{
+    const [x,y]=e.split("-").map(Number);
+    if(x===i)a.push(y);
+    if(y===i)a.push(x);
   });
-  return list;
+  return a;
 }
 
 function createNode(x,y) {
   const i = nodes.length;
-  positions[i] = {x,y};
-  originalPositions[i] = {x,y};
+  positions[i]={x,y};
+  originalPositions[i]={x,y};
 
   const c = document.createElementNS("http://www.w3.org/2000/svg","circle");
   c.setAttribute("cx",x);
   c.setAttribute("cy",y);
   c.setAttribute("r",R);
-  c.dataset.state = "0";
+  c.dataset.state="0";
 
   const t = document.createElementNS("http://www.w3.org/2000/svg","text");
   t.setAttribute("x",x);
   t.setAttribute("y",y);
 
-  c.onclick = e => {
+  c.onclick = e=>{
     e.stopPropagation();
 
-    if (addingEdge) {
-      if (edgeStart === null) {
-        edgeStart = i;
+    if(addingEdge){
+      if(edgeStart===null){
+        edgeStart=i;
         c.setAttribute("stroke","white");
         c.setAttribute("stroke-width","3");
-      } else if (edgeStart !== i) {
-        const a = Math.min(edgeStart,i);
-        const b = Math.max(edgeStart,i);
-        edges.add(`${a}-${b}`);
+      } else if(edgeStart!==i){
+        edges.add([Math.min(edgeStart,i),Math.max(edgeStart,i)].join("-"));
         clearEdgeSelection();
         drawEdges();
       }
       return;
     }
 
-    if (editMode) increment(i);
+    if(editMode) increment(i);
     else adjacency(i).forEach(increment);
   };
 
@@ -130,38 +141,31 @@ function createNode(x,y) {
   drawEdges();
 }
 
-function clearEdgeSelection() {
-  nodes.forEach(n => n.removeAttribute("stroke"));
-  edgeStart = null;
-}
-
-function increment(i) {
-  nodes[i].dataset.state = (+nodes[i].dataset.state + 1) % k;
+function increment(i){
+  nodes[i].dataset.state=(+nodes[i].dataset.state+1)%k;
   update(i);
 }
 
-function update(i) {
-  const s = +nodes[i].dataset.state;
-  nodes[i].setAttribute("fill", COLORS[s % COLORS.length]);
-  labels[i].textContent = s;
-  labels[i].style.display = displayMode === "numbers" ? "block" : "none";
+function update(i){
+  const s=+nodes[i].dataset.state;
+  nodes[i].setAttribute("fill",COLORS[s%COLORS.length]);
+  labels[i].textContent=s;
+  labels[i].style.display=displayMode==="numbers"?"block":"none";
 }
 
 /* ---------- EDGES ---------- */
 
-function drawEdges() {
-  const old = svg.querySelector("g");
-  if (old) old.remove();
+function drawEdges(){
+  const old=svg.querySelector("g");
+  if(old)old.remove();
+  const g=document.createElementNS("http://www.w3.org/2000/svg","g");
 
-  const g = document.createElementNS("http://www.w3.org/2000/svg","g");
+  edges.forEach(e=>{
+    const [i,j]=e.split("-").map(Number);
+    const p=positions[i], q=positions[j];
 
-  edges.forEach(e => {
-    const [i,j] = e.split("-").map(Number);
-    const p = positions[i];
-    const q = positions[j];
-
-    if (!linear) {
-      const l = document.createElementNS("http://www.w3.org/2000/svg","line");
+    if(!linear){
+      const l=document.createElementNS("http://www.w3.org/2000/svg","line");
       l.setAttribute("x1",p.x);
       l.setAttribute("y1",p.y);
       l.setAttribute("x2",q.x);
@@ -170,15 +174,12 @@ function drawEdges() {
       l.setAttribute("stroke-width","2");
       g.appendChild(l);
     } else {
-      const d = Math.abs(i-j);
-      const cx = SIZE/2 + 150 + d*40;
-      const cy = (p.y + q.y)/2;
+      const d=Math.abs(i-j);
+      const cx=SIZE/2+160+d*35;
+      const cy=(p.y+q.y)/2;
 
-      const path = document.createElementNS("http://www.w3.org/2000/svg","path");
-      path.setAttribute(
-        "d",
-        `M ${p.x} ${p.y} Q ${cx} ${cy} ${q.x} ${q.y}`
-      );
+      const path=document.createElementNS("http://www.w3.org/2000/svg","path");
+      path.setAttribute("d",`M ${p.x} ${p.y} Q ${cx} ${cy} ${q.x} ${q.y}`);
       path.setAttribute("fill","none");
       path.setAttribute("stroke","#888");
       path.setAttribute("stroke-width","2");
@@ -189,93 +190,126 @@ function drawEdges() {
   svg.prepend(g);
 }
 
+/* ---------- PRESET GRAPHS ---------- */
+
+function buildGrid(r,c){
+  reset();
+  const sx=80, sy=80;
+  const ox=SIZE/2-(c-1)*sx/2;
+  const oy=SIZE/2-(r-1)*sy/2;
+
+  for(let i=0;i<r;i++)
+    for(let j=0;j<c;j++)
+      createNode(ox+j*sx,oy+i*sy);
+
+  const n=r*c;
+  for(let i=0;i<n;i++){
+    const row=Math.floor(i/c), col=i%c;
+    if(row<r-1) edges.add(`${i}-${i+c}`);
+    if(col<c-1) edges.add(`${i}-${i+1}`);
+  }
+  drawEdges();
+}
+
+function buildRing(n){
+  reset();
+  const cx=SIZE/2, cy=SIZE/2, rad=200;
+  for(let i=0;i<n;i++){
+    const a=2*Math.PI*i/n;
+    createNode(cx+Math.cos(a)*rad,cy+Math.sin(a)*rad);
+  }
+  for(let i=0;i<n;i++)
+    edges.add(`${i}-${(i+1)%n}`);
+  drawEdges();
+}
+
 /* ---------- LINEARIZATION ---------- */
 
-function animateLinearize() {
-  const start = positions.map(p=>({...p}));
-  const end = [];
-  const x = SIZE/2;
-  const spacing = SIZE/(nodes.length+1);
+function animateLinearize(){
+  const start=positions.map(p=>({...p}));
+  const end=[];
+  const x=SIZE/2, sp=SIZE/(nodes.length+1);
 
-  if (!linear) {
-    for (let i=0;i<nodes.length;i++)
-      end[i] = {x, y: spacing*(i+1)};
+  if(!linear){
+    for(let i=0;i<nodes.length;i++)
+      end[i]={x,y:sp*(i+1)};
   } else {
-    for (let i=0;i<nodes.length;i++)
-      end[i] = {...originalPositions[i]};
+    for(let i=0;i<nodes.length;i++)
+      end[i]={...originalPositions[i]};
   }
 
-  linear = !linear;
-  const t0 = performance.now();
-  const dur = 700;
+  linear=!linear;
+  const t0=performance.now(), dur=700;
 
-  function step(t) {
-    const u = Math.min((t - t0)/dur,1);
-    const s = u*u*(3-2*u);
+  function step(t){
+    const u=Math.min((t-t0)/dur,1);
+    const s=u*u*(3-2*u);
 
     nodes.forEach((n,i)=>{
-      const x = start[i].x + (end[i].x - start[i].x)*s;
-      const y = start[i].y + (end[i].y - start[i].y)*s;
+      const x=start[i].x+(end[i].x-start[i].x)*s;
+      const y=start[i].y+(end[i].y-start[i].y)*s;
       positions[i]={x,y};
       n.setAttribute("cx",x);
       n.setAttribute("cy",y);
       labels[i].setAttribute("x",x);
       labels[i].setAttribute("y",y);
     });
-
     drawEdges();
-    if (u<1) requestAnimationFrame(step);
+    if(u<1)requestAnimationFrame(step);
   }
   requestAnimationFrame(step);
 }
 
 /* ---------- UI ---------- */
 
-modeBtn.onclick = () => {
-  editMode = !editMode;
-  modeBtn.textContent = `Mode: ${editMode?"EDIT":"PLAY"}`;
-};
+function clearEdgeSelection(){
+  nodes.forEach(n=>n.removeAttribute("stroke"));
+  edgeStart=null;
+}
 
-addNodeBtn.onclick = () => {
-  addingNode = true;
-  addingEdge = false;
-  clearEdgeSelection();
-};
+graphMode.onchange=()=>{
+  graphType=graphMode.value;
+  controls.innerHTML="";
+  addingNode=addingEdge=false;
 
-addEdgeBtn.onclick = () => {
-  addingEdge = true;
-  addingNode = false;
-  clearEdgeSelection();
-};
-
-svg.onclick = e => {
-  if (addingNode) {
-    const rect = svg.getBoundingClientRect();
-    createNode(e.clientX-rect.left,e.clientY-rect.top);
+  if(graphType==="grid"){
+    controls.innerHTML=`Rows <input id="r" value="5"> Cols <input id="c" value="5">`;
+    r.oninput=c.oninput=()=>buildGrid(+r.value,+c.value);
+    buildGrid(5,5);
+  }
+  if(graphType==="ring"){
+    controls.innerHTML=`Nodes <input id="n" value="12" min="3">`;
+    n.oninput=()=>buildRing(+n.value);
+    buildRing(12);
+  }
+  if(graphType==="custom"){
+    reset();
   }
 };
 
-randomBtn.onclick = () =>
-  nodes.forEach((_,i)=>{
-    nodes[i].dataset.state = Math.floor(Math.random()*k);
-    update(i);
-  });
-
-displayBtn.onclick = () => {
-  displayMode = displayMode==="colors"?"numbers":"colors";
-  displayBtn.textContent = `Display: ${displayMode.toUpperCase()}`;
+modeBtn.onclick=()=>{editMode=!editMode;modeBtn.textContent=`Mode: ${editMode?"EDIT":"PLAY"}`};
+addNodeBtn.onclick=()=>{addingNode=true;addingEdge=false;clearEdgeSelection()};
+addEdgeBtn.onclick=()=>{addingEdge=true;addingNode=false;clearEdgeSelection()};
+svg.onclick=e=>{
+  if(addingNode){
+    const r=svg.getBoundingClientRect();
+    createNode(e.clientX-r.left,e.clientY-r.top);
+  }
+};
+randomBtn.onclick=()=>nodes.forEach((_,i)=>{nodes[i].dataset.state=Math.floor(Math.random()*k);update(i)});
+displayBtn.onclick=()=>{
+  displayMode=displayMode==="colors"?"numbers":"colors";
+  displayBtn.textContent=`Display: ${displayMode.toUpperCase()}`;
   nodes.forEach((_,i)=>update(i));
 };
-
-stateCount.onchange = e => {
-  k = Math.max(2,+e.target.value);
-  nodes.forEach((n,i)=>{
-    n.dataset.state%=k;
-    update(i);
-  });
+stateCount.onchange=e=>{
+  k=Math.max(2,+e.target.value);
+  nodes.forEach((n,i)=>{n.dataset.state%=k;update(i)});
 };
+linearBtn.onclick=animateLinearize;
 
-linearBtn.onclick = animateLinearize;
+/* ---------- INIT ---------- */
+graphMode.onchange();
 </script>
 
 </body>
