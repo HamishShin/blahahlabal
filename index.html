@@ -43,7 +43,6 @@
 
 <!-- Custom mode buttons -->
 <div id="customControls" style="margin:5px;">
-  <button id="editToggleBtn">Start Editing</button>
   <button id="addNodeBtn">Add Node</button>
   <button id="addEdgeBtn">Add Edge</button>
 </div>
@@ -75,7 +74,7 @@ let nodes=[], labels=[];
 let positions=[], originalPositions=[];
 let edges=new Set();
 
-let editMode=false; // Starts in PLAY mode for all
+let editMode=false; // Starts in PLAY mode
 let displayMode="colors";
 let k=2;
 let linear=false;
@@ -121,8 +120,9 @@ function createNode(x,y){
   c.onclick=e=>{
     e.stopPropagation();
 
-    if(!editMode){
-      adjacency(i).forEach(increment);
+    if(editMode){
+      // EDIT mode: increment only this node
+      increment(i);
       return;
     }
 
@@ -138,6 +138,9 @@ function createNode(x,y){
       }
       return;
     }
+
+    // PLAY mode: increment this node and neighbors
+    adjacency(i).forEach(increment);
   };
 
   svg.appendChild(c);
@@ -272,16 +275,6 @@ const modeBtn = document.getElementById("modeBtn");
 modeBtn.onclick = () => {
   editMode = !editMode;
   modeBtn.textContent = `Mode: ${editMode ? "EDIT" : "PLAY"}`;
-};
-
-// Custom mode toggle editing button
-const editToggleBtn = document.getElementById("editToggleBtn");
-editToggleBtn.onclick = () => {
-  editMode = !editMode;
-  editToggleBtn.textContent = editMode ? "Stop Editing" : "Start Editing";
-  addingNode=false;
-  addingEdge=false;
-  clearEdgeSelection();
 };
 
 // Custom mode Add Node / Add Edge
