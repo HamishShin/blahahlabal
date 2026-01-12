@@ -38,13 +38,12 @@
   <option value="custom">Custom</option>
 </select>
 
-<!-- Mode toggle button for all modes -->
+<!-- Global Mode toggle button (all modes) -->
 <button id="modeBtn">Mode: PLAY</button>
 
-<!-- Custom mode only buttons -->
+<!-- Custom mode buttons -->
 <div id="customControls" style="margin:5px;">
-  <button id="startBtn">Start Game</button>
-  <button id="stopBtn">Stop Game</button>
+  <button id="editToggleBtn">Start Editing</button>
   <button id="addNodeBtn">Add Node</button>
   <button id="addEdgeBtn">Add Edge</button>
 </div>
@@ -76,7 +75,7 @@ let nodes=[], labels=[];
 let positions=[], originalPositions=[];
 let edges=new Set();
 
-let editMode=false; // Start in PLAY
+let editMode=false; // Starts in PLAY mode for all
 let displayMode="colors";
 let k=2;
 let linear=false;
@@ -268,24 +267,24 @@ function animateLinearize(){
 
 /* ---------- UI ---------- */
 
-// Mode toggle button
+// Global Mode toggle button
 const modeBtn = document.getElementById("modeBtn");
 modeBtn.onclick = () => {
   editMode = !editMode;
   modeBtn.textContent = `Mode: ${editMode ? "EDIT" : "PLAY"}`;
 };
 
-// Custom mode buttons
-document.getElementById("startBtn").onclick=()=>{
-  editMode=false;
+// Custom mode toggle editing button
+const editToggleBtn = document.getElementById("editToggleBtn");
+editToggleBtn.onclick = () => {
+  editMode = !editMode;
+  editToggleBtn.textContent = editMode ? "Stop Editing" : "Start Editing";
   addingNode=false;
   addingEdge=false;
-  modeBtn.textContent = "Mode: PLAY";
+  clearEdgeSelection();
 };
-document.getElementById("stopBtn").onclick=()=>{
-  editMode=true;
-  modeBtn.textContent = "Mode: EDIT";
-};
+
+// Custom mode Add Node / Add Edge
 addNodeBtn.onclick=()=>{addingNode=true;addingEdge=false;clearEdgeSelection()};
 addEdgeBtn.onclick=()=>{addingEdge=true;addingNode=false;clearEdgeSelection()};
 
