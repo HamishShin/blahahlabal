@@ -3,7 +3,6 @@
 <head>
 <meta charset="UTF-8">
 <title>Lights Out Graph Builder</title>
-
 <style>
   body {
     background: #111;
@@ -29,7 +28,6 @@
   button, select, input { margin: 5px; }
 </style>
 </head>
-
 <body>
 
 <h2>Lights Out Graph Builder</h2>
@@ -40,7 +38,8 @@
   <option value="custom">Custom</option>
 </select>
 
-<button id="modeBtn">Mode: PLAY</button>
+<button id="startBtn">Start Game</button>
+<button id="stopBtn">Stop Game</button>
 <button id="addNodeBtn">Add Node</button>
 <button id="addEdgeBtn">Add Edge</button>
 <button id="randomBtn">Randomize</button>
@@ -56,40 +55,38 @@ States (k):
 <svg id="svg" width="600" height="600"></svg>
 
 <script>
-const svg = document.getElementById("svg");
-const controls = document.getElementById("controls");
+const svg=document.getElementById("svg");
+const controls=document.getElementById("controls");
 
-const SIZE = 600;
-const R = 12;
-const COLORS = ["#ff0000","#0000ff","#00ff00","#ffff00","#ff00ff","#00ffff","#ffffff","#ff8800"];
+const SIZE=600;
+const R=12;
+const COLORS=["#ff0000","#0000ff","#00ff00","#ffff00","#ff00ff","#00ffff","#ffffff","#ff8800"];
 
-let nodes = [], labels = [];
-let positions = [], originalPositions = [];
-let edges = new Set();
+let nodes=[], labels=[];
+let positions=[], originalPositions=[];
+let edges=new Set();
 
-let editMode = false;
-let displayMode = "colors";
-let k = 2;
-let linear = false;
-let graphType = "grid";
+let editMode=false;
+let displayMode="colors";
+let k=2;
+let linear=false;
+let graphType="grid";
 
-let addingNode = false;
-let addingEdge = false;
-let edgeStart = null;
+let addingNode=false;
+let addingEdge=false;
+let edgeStart=null;
 
 /* ---------- CORE ---------- */
 
-function reset() {
-  svg.innerHTML = "";
-  nodes = [];
-  labels = [];
-  positions = [];
-  originalPositions = [];
+function reset(){
+  svg.innerHTML="";
+  nodes=[]; labels=[];
+  positions=[]; originalPositions=[];
   edges.clear();
 }
 
-function adjacency(i) {
-  const a = [i];
+function adjacency(i){
+  const a=[i];
   edges.forEach(e=>{
     const [x,y]=e.split("-").map(Number);
     if(x===i)a.push(y);
@@ -98,23 +95,27 @@ function adjacency(i) {
   return a;
 }
 
-function createNode(x,y) {
-  const i = nodes.length;
+function createNode(x,y){
+  const i=nodes.length;
   positions[i]={x,y};
   originalPositions[i]={x,y};
 
-  const c = document.createElementNS("http://www.w3.org/2000/svg","circle");
+  const c=document.createElementNS("http://www.w3.org/2000/svg","circle");
   c.setAttribute("cx",x);
   c.setAttribute("cy",y);
   c.setAttribute("r",R);
   c.dataset.state="0";
 
-  const t = document.createElementNS("http://www.w3.org/2000/svg","text");
+  const t=document.createElementNS("http://www.w3.org/2000/svg","text");
   t.setAttribute("x",x);
   t.setAttribute("y",y);
 
-  c.onclick = e=>{
+  c.onclick=e=>{
     e.stopPropagation();
+    if(!editMode){
+      adjacency(i).forEach(increment);
+      return;
+    }
 
     if(addingEdge){
       if(edgeStart===null){
@@ -129,8 +130,9 @@ function createNode(x,y) {
       return;
     }
 
-    if(editMode) increment(i);
-    else adjacency(i).forEach(increment);
+    if(addingNode){
+      // do nothing special; nodes are added via click
+    }
   };
 
   svg.appendChild(c);
@@ -177,7 +179,6 @@ function drawEdges(){
       const d=Math.abs(i-j);
       const cx=SIZE/2+160+d*35;
       const cy=(p.y+q.y)/2;
-
       const path=document.createElementNS("http://www.w3.org/2000/svg","path");
       path.setAttribute("d",`M ${p.x} ${p.y} Q ${cx} ${cy} ${q.x} ${q.y}`);
       path.setAttribute("fill","none");
@@ -231,11 +232,9 @@ function animateLinearize(){
   const x=SIZE/2, sp=SIZE/(nodes.length+1);
 
   if(!linear){
-    for(let i=0;i<nodes.length;i++)
-      end[i]={x,y:sp*(i+1)};
+    for(let i=0;i<nodes.length;i++) end[i]={x,y:sp*(i+1)};
   } else {
-    for(let i=0;i<nodes.length;i++)
-      end[i]={...originalPositions[i]};
+    for(let i=0;i<nodes.length;i++) end[i]={...originalPositions[i]};
   }
 
   linear=!linear;
@@ -255,7 +254,7 @@ function animateLinearize(){
       labels[i].setAttribute("y",y);
     });
     drawEdges();
-    if(u<1)requestAnimationFrame(step);
+    if(u<1) requestAnimationFrame(step);
   }
   requestAnimationFrame(step);
 }
@@ -267,10 +266,54 @@ function clearEdgeSelection(){
   edgeStart=null;
 }
 
+// Mode toggle
+modeBtn.onclick=()=>{
+  editMode=!editMode;
+  modeBtn.textContent=`Mode: ${editMode?"EDIT":"PLAY"}`;
+};
+
+// Start / Stop buttons
+document.getElementById("startBtn").onclick=()=>{
+  editMode=false;
+  addingNode=false;
+  addingEdge=false;
+  modeBtn.textContent="Mode: PLAY";
+};
+document.getElementById("stopBtn").onclick=()=>{
+  editMode=true;
+  modeBtn.textContent="Mode: EDIT";
+};
+
+// Node / Edge buttons
+addNodeBtn.onclick=()=>{addingNode=true;addingEdge=false;clearEdgeSelection()};
+addEdgeBtn.onclick=()=>{addingEdge=true;addingNode=false;clearEdgeSelection()};
+
+// SVG click for custom nodes
+svg.onclick=e=>{
+  if(graphType==="custom" && addingNode){
+    const r=svg.getBoundingClientRect();
+    createNode(e.clientX-r.left,e.clientY-r.top);
+  }
+};
+
+// Randomize / display / states / linearize
+randomBtn.onclick=()=>nodes.forEach((_,i)=>{nodes[i].dataset.state=Math.floor(Math.random()*k);update(i)});
+displayBtn.onclick=()=>{
+  displayMode=displayMode==="colors"?"numbers":"colors";
+  displayBtn.textContent=`Display: ${displayMode.toUpperCase()}`;
+  nodes.forEach((_,i)=>update(i));
+};
+stateCount.onchange=e=>{
+  k=Math.max(2,+e.target.value);
+  nodes.forEach((n,i)=>{n.dataset.state%=k;update(i)});
+};
+linearBtn.onclick=animateLinearize;
+
+/* ---------- Graph selection ---------- */
 graphMode.onchange=()=>{
   graphType=graphMode.value;
   controls.innerHTML="";
-  addingNode=addingEdge=false;
+  addingNode=false; addingEdge=false;
 
   if(graphType==="grid"){
     controls.innerHTML=`Rows <input id="r" value="5"> Cols <input id="c" value="5">`;
@@ -287,30 +330,9 @@ graphMode.onchange=()=>{
   }
 };
 
-modeBtn.onclick=()=>{editMode=!editMode;modeBtn.textContent=`Mode: ${editMode?"EDIT":"PLAY"}`};
-addNodeBtn.onclick=()=>{addingNode=true;addingEdge=false;clearEdgeSelection()};
-addEdgeBtn.onclick=()=>{addingEdge=true;addingNode=false;clearEdgeSelection()};
-svg.onclick=e=>{
-  if(addingNode){
-    const r=svg.getBoundingClientRect();
-    createNode(e.clientX-r.left,e.clientY-r.top);
-  }
-};
-randomBtn.onclick=()=>nodes.forEach((_,i)=>{nodes[i].dataset.state=Math.floor(Math.random()*k);update(i)});
-displayBtn.onclick=()=>{
-  displayMode=displayMode==="colors"?"numbers":"colors";
-  displayBtn.textContent=`Display: ${displayMode.toUpperCase()}`;
-  nodes.forEach((_,i)=>update(i));
-};
-stateCount.onchange=e=>{
-  k=Math.max(2,+e.target.value);
-  nodes.forEach((n,i)=>{n.dataset.state%=k;update(i)});
-};
-linearBtn.onclick=animateLinearize;
-
-/* ---------- INIT ---------- */
+// Initialize
 graphMode.onchange();
-</script>
 
+</script>
 </body>
 </html>
