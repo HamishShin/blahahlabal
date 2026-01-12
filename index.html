@@ -10,18 +10,15 @@
     font-family: sans-serif;
     text-align: center;
   }
-
   svg {
     background: #1a1a1a;
     border-radius: 10px;
     margin-top: 10px;
   }
-
   circle {
     cursor: pointer;
     transition: fill 0.15s;
   }
-
   text {
     pointer-events: none;
     font-size: 14px;
@@ -30,7 +27,6 @@
     text-anchor: middle;
     dominant-baseline: middle;
   }
-
   button, select, input {
     margin: 5px;
   }
@@ -44,7 +40,7 @@
 <select id="shapeSelect">
   <option value="grid">Grid</option>
   <option value="ring">Ring</option>
-  <option value="star">Star Shape</option>
+  <option value="star">Star Polygon</option>
 </select>
 
 <button id="modeBtn">Mode: PLAY</button>
@@ -58,13 +54,13 @@ States (k):
 
 <div id="controls"></div>
 
-<svg id="svg" width="500" height="500"></svg>
+<svg id="svg" width="520" height="520"></svg>
 
 <script>
 const svg = document.getElementById("svg");
 const controls = document.getElementById("controls");
 
-const SIZE = 500;
+const SIZE = 520;
 const R = 12;
 const COLORS = ["#ff0000","#0000ff","#00ff00","#ffff00","#ff00ff","#00ffff"];
 
@@ -134,21 +130,42 @@ function drawEdges() {
   if (old) old.remove();
 
   const g = document.createElementNS("http://www.w3.org/2000/svg","g");
+
   positions.forEach((p,i)=>{
     adjacency(i).forEach(j=>{
       if(j>i){
         const q = positions[j];
-        const l = document.createElementNS("http://www.w3.org/2000/svg","line");
-        l.setAttribute("x1",p.x);
-        l.setAttribute("y1",p.y);
-        l.setAttribute("x2",q.x);
-        l.setAttribute("y2",q.y);
-        l.setAttribute("stroke","#666");
-        l.setAttribute("stroke-width","2");
-        g.appendChild(l);
+
+        if(!linear){
+          const l = document.createElementNS("http://www.w3.org/2000/svg","line");
+          l.setAttribute("x1",p.x);
+          l.setAttribute("y1",p.y);
+          l.setAttribute("x2",q.x);
+          l.setAttribute("y2",q.y);
+          l.setAttribute("stroke","#666");
+          l.setAttribute("stroke-width","2");
+          g.appendChild(l);
+        } else {
+          const dx = Math.abs(j-i);
+          const midx = (p.x+q.x)/2;
+          const midy = SIZE/2 - 30 - dx*6;
+
+          const path = document.createElementNS("http://www.w3.org/2000/svg","path");
+          path.setAttribute(
+            "d",
+            `M ${p.x} ${p.y}
+             Q ${midx} ${midy}
+             ${q.x} ${q.y}`
+          );
+          path.setAttribute("fill","none");
+          path.setAttribute("stroke","#888");
+          path.setAttribute("stroke-width","2");
+          g.appendChild(path);
+        }
       }
     });
   });
+
   svg.prepend(g);
 }
 
@@ -156,84 +173,79 @@ function drawEdges() {
 
 function drawGrid(rows, cols) {
   clear();
-  const sx = 70, sy = 70;
-  const ox = SIZE/2 - (cols-1)*sx/2;
-  const oy = SIZE/2 - (rows-1)*sy/2;
+  const sx=70, sy=70;
+  const ox=SIZE/2-(cols-1)*sx/2;
+  const oy=SIZE/2-(rows-1)*sy/2;
 
   for(let r=0;r<rows;r++)
     for(let c=0;c<cols;c++)
-      createNode(ox+c*sx, oy+r*sy, r*cols+c);
+      createNode(ox+c*sx,oy+r*sy,r*cols+c);
 
-  adjacency = i => {
-    const r = Math.floor(i/cols);
-    const c = i%cols;
+  adjacency=i=>{
+    const r=Math.floor(i/cols), c=i%cols;
     const a=[i];
-    if(r>0) a.push(i-cols);
-    if(r<rows-1) a.push(i+cols);
-    if(c>0) a.push(i-1);
-    if(c<cols-1) a.push(i+1);
+    if(r>0)a.push(i-cols);
+    if(r<rows-1)a.push(i+cols);
+    if(c>0)a.push(i-1);
+    if(c<cols-1)a.push(i+1);
     return a;
   };
-
   drawEdges();
 }
 
 function drawRing(n) {
   clear();
-  const cx=SIZE/2, cy=SIZE/2, rad=180;
+  const cx=SIZE/2, cy=SIZE/2, rad=190;
 
   for(let i=0;i<n;i++){
     const a=2*Math.PI*i/n;
-    createNode(cx+Math.cos(a)*rad, cy+Math.sin(a)*rad, i);
+    createNode(cx+Math.cos(a)*rad,cy+Math.sin(a)*rad,i);
   }
-
   adjacency=i=>[i,(i-1+n)%n,(i+1)%n];
   drawEdges();
 }
 
 function drawStar(n) {
   clear();
-  const cx=SIZE/2, cy=SIZE/2;
-  const R1=180, R2=80;
+  const cx=SIZE/2, cy=SIZE/2, rad=190;
+  const step=Math.floor(n/2);
 
   for(let i=0;i<n;i++){
     const a=2*Math.PI*i/n;
-    const r=i%2===0?R1:R2;
-    createNode(cx+Math.cos(a)*r, cy+Math.sin(a)*r, i);
+    createNode(cx+Math.cos(a)*rad,cy+Math.sin(a)*rad,i);
   }
 
-  adjacency=i=>[i,(i-1+n)%n,(i+1)%n];
+  adjacency=i=>[i,(i+step)%n,(i-step+n)%n];
   drawEdges();
 }
 
-/* ---------- ANIMATED LINEARIZE ---------- */
+/* ---------- ANIMATED LINEARIZATION ---------- */
 
 function animateLinearize() {
-  const start = positions.map(p=>({...p}));
-  const end = [];
-  const y = SIZE/2;
-  const spacing = SIZE/(nodes.length+1);
+  const start=positions.map(p=>({...p}));
+  const end=[];
+  const y=SIZE/2;
+  const spacing=SIZE/(nodes.length+1);
 
   if(!linear){
     for(let i=0;i<nodes.length;i++)
-      end[i] = {x:spacing*(i+1), y};
+      end[i]={x:spacing*(i+1),y};
   } else {
     for(let i=0;i<nodes.length;i++)
-      end[i] = {...originalPositions[i]};
+      end[i]={...originalPositions[i]};
   }
 
-  linear = !linear;
-
-  const duration = 500;
-  const t0 = performance.now();
+  linear=!linear;
+  const duration=600;
+  const t0=performance.now();
 
   function step(now){
-    const t = Math.min((now-t0)/duration,1);
-    const s = t*t*(3-2*t); // smoothstep
+    const t=Math.min((now-t0)/duration,1);
+    const s=t*t*(3-2*t);
 
     nodes.forEach((n,i)=>{
-      const x = start[i].x + (end[i].x-start[i].x)*s;
-      const y = start[i].y + (end[i].y-start[i].y)*s;
+      const x=start[i].x+(end[i].x-start[i].x)*s;
+      const y=start[i].y+(end[i].y-start[i].y)*s;
       positions[i]={x,y};
       n.setAttribute("cx",x);
       n.setAttribute("cy",y);
@@ -242,38 +254,12 @@ function animateLinearize() {
     });
 
     drawEdges();
-    if(t<1) requestAnimationFrame(step);
+    if(t<1)requestAnimationFrame(step);
   }
-
   requestAnimationFrame(step);
 }
 
 /* ---------- UI ---------- */
-
-function updateControls(){
-  controls.innerHTML = "";
-
-  if(shape==="grid"){
-    controls.innerHTML = `
-      Rows <input id="rows" type="number" value="5" min="2" max="10">
-      Cols <input id="cols" type="number" value="5" min="2" max="10">
-    `;
-    rows.oninput=cols.oninput=()=>drawGrid(+rows.value,+cols.value);
-    drawGrid(5,5);
-  }
-
-  if(shape==="ring"){
-    controls.innerHTML = `Nodes <input id="n" type="range" min="3" max="40" value="12">`;
-    n.oninput=()=>drawRing(+n.value);
-    drawRing(12);
-  }
-
-  if(shape==="star"){
-    controls.innerHTML = `Nodes <input id="n" type="range" min="5" max="30" value="11">`;
-    n.oninput=()=>drawStar(+n.value);
-    drawStar(11);
-  }
-}
 
 shapeSelect.onchange=()=>{shape=shapeSelect.value; updateControls();};
 modeBtn.onclick=()=>{editMode=!editMode; modeBtn.textContent=`Mode: ${editMode?"EDIT":"PLAY"}`;};
@@ -285,6 +271,13 @@ displayBtn.onclick=()=>{
 randomBtn.onclick=()=>nodes.forEach((n,i)=>{n.dataset.state=Math.floor(Math.random()*k);update(i);});
 stateCount.onchange=e=>{k=Math.max(2,+e.target.value);nodes.forEach((n,i)=>{n.dataset.state%=k;update(i);});};
 lineBtn.onclick=animateLinearize;
+
+function updateControls(){
+  controls.innerHTML="";
+  if(shape==="grid"){controls.innerHTML=`Rows <input id="r" value="5"> Cols <input id="c" value="5">`; r.oninput=c.oninput=()=>drawGrid(+r.value,+c.value); drawGrid(5,5);}
+  if(shape==="ring"){controls.innerHTML=`Nodes <input id="n" type="range" min="3" max="40" value="12">`; n.oninput=()=>drawRing(+n.value); drawRing(12);}
+  if(shape==="star"){controls.innerHTML=`Nodes <input id="n" type="range" min="5" max="30" value="7">`; n.oninput=()=>drawStar(+n.value); drawStar(7);}
+}
 
 updateControls();
 </script>
